@@ -1,0 +1,25 @@
+# GitHub Deployment Commands for KidTrackerApp
+# Copy and paste these commands into your terminal (Git Bash or PowerShell)
+
+# 1. Navigate to project directory
+cd "c:/Users/thoma/Downloads/KidTracker-main/KidTracker-main"
+
+# 2. Add your GitHub repository as remote
+# IMPORTANT: Replace 'YOUR_GITHUB_USERNAME' with your actual GitHub username
+# After creating the repo on GitHub, copy the URL from there
+git remote add origin https://github.com/YOUR_GITHUB_USERNAME/kidtracker-app.git
+
+# 3. Rename branch to main (if needed)
+git branch -M main
+
+# 4. Push to GitHub
+git push -u origin main
+
+# If prompted for credentials:
+# - Username: your GitHub username
+# - Password: use a Personal Access Token (not your password)
+#   Get token at: https://github.com/settings/tokens
+
+# Alternative: If you have SSH set up, use this instead:
+# git remote add origin git@github.com:YOUR_GITHUB_USERNAME/kidtracker-app.git
+# git push -u origin main

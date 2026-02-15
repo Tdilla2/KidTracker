@@ -1,0 +1,15 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-kidtrackerwebbappdev-dev-c1105-authRole",
+      "UnauthRoleArn": "arn:aws:iam::130423149110:role/amplify-kidtrackerwebbappdev-dev-c1105-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::130423149110:role/amplify-kidtrackerwebbappdev-dev-c1105-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-kidtrackerwebbappdev-dev-c1105-deployment",
+      "UnauthRoleName": "amplify-kidtrackerwebbappdev-dev-c1105-unauthRole",
+      "StackName": "amplify-kidtrackerwebbappdev-dev-c1105",
+      "StackId": "arn:aws:cloudformation:us-east-1:130423149110:stack/amplify-kidtrackerwebbappdev-dev-c1105/0377f890-004a-11f1-87c8-0e3dd0f0bb6b",
+      "AmplifyAppId": "d2nbsjhv8lzch9"
+    }
+  }
+}

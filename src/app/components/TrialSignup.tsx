@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Users, Building2, User, Mail, Phone, MapPin, ArrowLeft, Copy, Check, PartyPopper } from "lucide-react";
+import { maskPhoneInput } from "../../lib/formatPhone";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -272,8 +273,8 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
                   <Input
                     id="signup-phone"
                     type="tel"
-                    placeholder="e.g. (555) 123-4567"
-                    value={phone}
+                    placeholder="(555) 123-4567"
+                    value={maskPhoneInput(phone)}
                     onChange={(e) => setPhone(e.target.value)}
                     className="pl-10"
                     disabled={isLoading}

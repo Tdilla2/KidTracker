@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Baby, Plus, Edit, Trash2, Search, UserCheck, UserX, Camera, X, User } from "lucide-react";
 import { format } from "date-fns";
+import { formatPhone, maskPhoneInput } from "../../lib/formatPhone";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -445,8 +446,9 @@ export function ChildrenManagement() {
                       <Input
                         id="parentPhone"
                         type="tel"
-                        value={formData.parentPhone}
+                        value={maskPhoneInput(formData.parentPhone)}
                         onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
+                        placeholder="(555) 123-4567"
                         required
                       />
                     </div>
@@ -471,8 +473,9 @@ export function ChildrenManagement() {
                     <Input
                       id="emergencyPhone"
                       type="tel"
-                      value={formData.emergencyPhone}
+                      value={maskPhoneInput(formData.emergencyPhone)}
                       onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value })}
+                      placeholder="(555) 123-4567"
                     />
                   </div>
                 </div>
@@ -496,9 +499,9 @@ export function ChildrenManagement() {
                     <Input
                       id="emergencyPhone2"
                       type="tel"
-                      value={formData.emergencyPhone2}
+                      value={maskPhoneInput(formData.emergencyPhone2)}
                       onChange={(e) => setFormData({ ...formData, emergencyPhone2: e.target.value })}
-                      placeholder="Optional"
+                      placeholder="(555) 123-4567"
                     />
                   </div>
                 </div>
@@ -528,9 +531,9 @@ export function ChildrenManagement() {
                       <Input
                         id="authorizedPickup1Phone"
                         type="tel"
-                        value={formData.authorizedPickup1Phone}
+                        value={maskPhoneInput(formData.authorizedPickup1Phone)}
                         onChange={(e) => setFormData({ ...formData, authorizedPickup1Phone: e.target.value })}
-                        placeholder="Phone"
+                        placeholder="(555) 123-4567"
                       />
                     </div>
                   </div>
@@ -551,9 +554,9 @@ export function ChildrenManagement() {
                       <Input
                         id="authorizedPickup2Phone"
                         type="tel"
-                        value={formData.authorizedPickup2Phone}
+                        value={maskPhoneInput(formData.authorizedPickup2Phone)}
                         onChange={(e) => setFormData({ ...formData, authorizedPickup2Phone: e.target.value })}
-                        placeholder="Phone"
+                        placeholder="(555) 123-4567"
                       />
                     </div>
                   </div>
@@ -574,9 +577,9 @@ export function ChildrenManagement() {
                       <Input
                         id="authorizedPickup3Phone"
                         type="tel"
-                        value={formData.authorizedPickup3Phone}
+                        value={maskPhoneInput(formData.authorizedPickup3Phone)}
                         onChange={(e) => setFormData({ ...formData, authorizedPickup3Phone: e.target.value })}
-                        placeholder="Phone"
+                        placeholder="(555) 123-4567"
                       />
                     </div>
                   </div>
@@ -743,13 +746,13 @@ export function ChildrenManagement() {
                     <h4 className="font-medium mb-2">Parent/Guardian</h4>
                     <p className="text-sm">{child.parentName}</p>
                     <p className="text-sm text-muted-foreground">{child.parentEmail}</p>
-                    <p className="text-sm text-muted-foreground">{child.parentPhone}</p>
+                    <p className="text-sm text-muted-foreground">{formatPhone(child.parentPhone)}</p>
                   </div>
                   {child.emergencyContact && (
                     <div>
                       <h4 className="font-medium mb-2">Emergency Contact</h4>
                       <p className="text-sm">{child.emergencyContact}</p>
-                      <p className="text-sm text-muted-foreground">{child.emergencyPhone}</p>
+                      <p className="text-sm text-muted-foreground">{formatPhone(child.emergencyPhone)}</p>
                     </div>
                   )}
                 </div>

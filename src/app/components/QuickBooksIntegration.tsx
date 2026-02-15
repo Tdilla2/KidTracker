@@ -217,7 +217,7 @@ export function QuickBooksIntegration() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="mb-1">QuickBooks Integration</h1>
+          <h1 className="mb-1 flex items-center gap-2">QuickBooks Integration <Badge className="bg-amber-500 text-white hover:bg-amber-500">Coming Soon</Badge></h1>
           <p className="text-muted-foreground">Sync your KidTrackerApp™ data with QuickBooks Online</p>
         </div>
         <div className="flex items-center gap-2">
@@ -287,9 +287,9 @@ export function QuickBooksIntegration() {
                         <div className="flex gap-2">
                           <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                           <div className="text-sm text-blue-900">
-                            <p className="font-medium">Simulated Connection</p>
+                            <p className="font-medium">Demonstration Mode</p>
                             <p className="text-blue-700 mt-1">
-                              This is a demonstration. In production, you would authenticate via QuickBooks OAuth.
+                              This is a demonstration. When completed, you will be able to authenticate to QuickBooks Online.
                             </p>
                           </div>
                         </div>

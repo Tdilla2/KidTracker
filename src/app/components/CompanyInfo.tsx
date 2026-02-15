@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Building2, Save, Mail, Phone, Globe, MapPin, Hash, AlertCircle, Copy, Upload, Clock, ImageIcon, X } from "lucide-react";
+import { formatPhone, maskPhoneInput } from "../../lib/formatPhone";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -276,7 +277,7 @@ export function CompanyInfo() {
                       <Input
                         id="phone"
                         type="tel"
-                        value={formData.phone}
+                        value={maskPhoneInput(formData.phone)}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder="(555) 123-4567"
                         className="pl-10"
@@ -516,7 +517,7 @@ export function CompanyInfo() {
                   <Phone className="h-3 w-3" />
                   Phone
                 </p>
-                <p>{companyInfo.phone || "Not set"}</p>
+                <p>{companyInfo.phone ? formatPhone(companyInfo.phone) : "Not set"}</p>
               </div>
 
               <div>
@@ -627,7 +628,7 @@ export function CompanyInfo() {
                       </p>
                       <p className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-blue-700" />
-                        {companyInfo.phone || "Phone not set"}
+                        {companyInfo.phone ? formatPhone(companyInfo.phone) : "Phone not set"}
                       </p>
                       <p className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-blue-700" />

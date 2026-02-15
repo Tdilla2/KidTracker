@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download } from "lucide-react";
 import { format } from "date-fns";
+import { formatPhone } from "../../lib/formatPhone";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -284,7 +285,7 @@ export function Invoicing() {
             <div>${child?.firstName} ${child?.lastName}</div>
             <div style="color: #666; font-size: 14px;">${child?.parentName}</div>
             <div style="color: #666; font-size: 14px;">${child?.parentEmail}</div>
-            <div style="color: #666; font-size: 14px;">${child?.parentPhone}</div>
+            <div style="color: #666; font-size: 14px;">${formatPhone(child?.parentPhone)}</div>
           </div>
 
           <div class="section">

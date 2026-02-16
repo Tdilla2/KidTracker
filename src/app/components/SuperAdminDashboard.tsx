@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon, Archive, ArchiveRestore } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -25,10 +25,11 @@ import { toast } from "sonner";
 import { getTrialInfo, computeTrialEndDate } from "../../utils/trialUtils";
 
 export function SuperAdminDashboard() {
-  const { daycares, users, addDaycare, updateDaycare, deleteDaycare, currentUser, updateUser } = useAuth();
+  const { daycares, users, addDaycare, updateDaycare, deleteDaycare, archiveDaycare, currentUser, updateUser } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDaycare, setEditingDaycare] = useState<Daycare | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     username: "",
@@ -47,7 +48,7 @@ export function SuperAdminDashboard() {
     zipCode: "",
     phone: "",
     email: "",
-    status: "active" as "active" | "inactive",
+    status: "active" as "active" | "inactive" | "archived",
   });
 
   const resetForm = () => {
@@ -142,6 +143,28 @@ export function SuperAdminDashboard() {
     }
   };
 
+  const handleArchive = async (daycare: Daycare) => {
+    if (!confirm(`Archive "${daycare.name}"? It will be hidden from the main list but can be restored later.`)) {
+      return;
+    }
+
+    try {
+      await archiveDaycare(daycare.id);
+      toast.success(`"${daycare.name}" archived successfully`);
+    } catch (error) {
+      toast.error("Failed to archive daycare");
+    }
+  };
+
+  const handleRestore = async (daycare: Daycare) => {
+    try {
+      await updateDaycare(daycare.id, { status: "active" });
+      toast.success(`"${daycare.name}" restored successfully`);
+    } catch (error) {
+      toast.error("Failed to restore daycare");
+    }
+  };
+
   const copyDaycareCode = (code: string) => {
     navigator.clipboard.writeText(code);
     toast.success("Daycare code copied to clipboard");
@@ -156,12 +179,16 @@ export function SuperAdminDashboard() {
     };
   };
 
-  // Filter daycares by search term
-  const filteredDaycares = daycares.filter(dc =>
-    dc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    dc.daycareCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (dc.city && dc.city.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter daycares by search term and archived status
+  const filteredDaycares = daycares.filter(dc => {
+    const matchesSearch = dc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      dc.daycareCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (dc.city && dc.city.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesArchiveFilter = showArchived ? dc.status === "archived" : dc.status !== "archived";
+    return matchesSearch && matchesArchiveFilter;
+  });
+
+  const archivedCount = daycares.filter(dc => dc.status === "archived").length;
 
   // Trial action handlers
   const handleExtendTrial = async (daycare: Daycare) => {
@@ -516,7 +543,7 @@ export function SuperAdminDashboard() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search & Filter */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -527,6 +554,17 @@ export function SuperAdminDashboard() {
             className="pl-10"
           />
         </div>
+        {archivedCount > 0 && (
+          <Button
+            variant={showArchived ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowArchived(!showArchived)}
+            className={showArchived ? "bg-amber-600 hover:bg-amber-700" : ""}
+          >
+            <Archive className="h-4 w-4 mr-2" />
+            Archived ({archivedCount})
+          </Button>
+        )}
       </div>
 
       {/* Daycares Grid */}
@@ -537,11 +575,13 @@ export function SuperAdminDashboard() {
               <div className="text-center">
                 <Building2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {searchTerm ? "No daycares found" : "No daycares yet"}
+                  {searchTerm ? "No daycares found" : showArchived ? "No archived daycares" : "No daycares yet"}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   {searchTerm
                     ? "Try adjusting your search"
+                    : showArchived
+                    ? "Archived daycares will appear here"
                     : "Get started by adding your first daycare center"}
                 </p>
                 {!searchTerm && (
@@ -561,7 +601,12 @@ export function SuperAdminDashboard() {
             const stats = getDaycareStats(daycare.id);
             const trialInfo = getTrialInfo(daycare);
 
-            const trialBadge = trialInfo.isPermanentlyActive ? (
+            const trialBadge = daycare.status === "archived" ? (
+              <Badge variant="outline" className="border-amber-500 bg-amber-50 text-amber-700">
+                <Archive className="h-3 w-3 mr-1" />
+                Archived
+              </Badge>
+            ) : trialInfo.isPermanentlyActive ? (
               <Badge variant="outline" className="border-green-500 bg-green-50 text-green-700">
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Active
@@ -650,20 +695,53 @@ export function SuperAdminDashboard() {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2 border-t justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(daycare)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(daycare)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
+                    {daycare.status === "archived" ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRestore(daycare)}
+                          title="Restore daycare"
+                        >
+                          <ArchiveRestore className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(daycare)}
+                          title="Permanently delete"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(daycare)}
+                          title="Edit daycare"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleArchive(daycare)}
+                          title="Archive daycare"
+                        >
+                          <Archive className="h-4 w-4 text-amber-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(daycare)}
+                          title="Delete daycare"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>

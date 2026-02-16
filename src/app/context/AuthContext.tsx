@@ -28,7 +28,7 @@ export interface Daycare {
   zipCode?: string;
   phone?: string;
   email?: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "archived";
   createdAt: string;
   ownerUserId?: string;
   trialEndsAt?: string;
@@ -50,6 +50,7 @@ interface AuthContextType {
   addDaycare: (daycare: Omit<Daycare, "id" | "createdAt">) => Promise<Daycare>;
   updateDaycare: (id: string, daycare: Partial<Daycare>) => Promise<void>;
   deleteDaycare: (id: string) => Promise<void>;
+  archiveDaycare: (id: string) => Promise<void>;
   setCurrentDaycare: (daycare: Daycare | null) => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -753,7 +754,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "classrooms",
         "children",
         "company_info",
-        "users",
+        "app_users",
       ];
 
       for (const table of relatedTables) {
@@ -791,6 +792,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const archiveDaycare = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("daycares")
+        .update({ status: "archived" })
+        .eq("id", id);
+
+      if (error) {
+        console.error("Error archiving daycare:", error);
+        throw error;
+      }
+
+      setDaycares(prev =>
+        prev.map(dc => (dc.id === id ? { ...dc, status: "archived" as const } : dc))
+      );
+
+      if (currentDaycare?.id === id) {
+        setCurrentDaycareState(null);
+      }
+    } catch (error) {
+      console.error("Error archiving daycare:", error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       currentUser,
@@ -807,6 +833,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addDaycare,
       updateDaycare,
       deleteDaycare,
+      archiveDaycare,
       setCurrentDaycare,
       isAuthenticated: !!currentUser,
       isAdmin: currentUser?.role === "admin" || currentUser?.role === "super_admin",

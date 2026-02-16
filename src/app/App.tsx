@@ -16,6 +16,8 @@ import { Activities } from "./components/Activities";
 import { Classrooms } from "./components/Classrooms";
 import { Login } from "./components/Login";
 import { TrialSignup } from "./components/TrialSignup";
+import { ForcePasswordChange } from "./components/ForcePasswordChange";
+import { ForgotPassword } from "./components/ForgotPassword";
 import { SuperAdminDashboard } from "./components/SuperAdminDashboard";
 import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -29,6 +31,7 @@ function AppContent() {
   const { isAuthenticated, isAdmin, isSuperAdmin, currentUser, currentDaycare, setCurrentDaycare, logout, logoutCount } = useAuth();
   const { companyInfo } = useData();
   const [showTrialSignup, setShowTrialSignup] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     // Initialize state based on user role
     if (!currentUser) return "dashboard";
@@ -37,7 +40,7 @@ function AppContent() {
     return "dashboard";
   });
 
-  // Show login or trial signup screen if not authenticated
+  // Show login or trial signup or forgot password screen if not authenticated
   if (!isAuthenticated) {
     if (showTrialSignup) {
       return (
@@ -47,9 +50,31 @@ function AppContent() {
         </>
       );
     }
+    if (showForgotPassword) {
+      return (
+        <>
+          <ForgotPassword onBackToLogin={() => setShowForgotPassword(false)} />
+          <Toaster />
+        </>
+      );
+    }
     return (
       <>
-        <Login key={logoutCount} onStartTrial={() => setShowTrialSignup(true)} />
+        <Login
+          key={logoutCount}
+          onStartTrial={() => setShowTrialSignup(true)}
+          onForgotPassword={() => setShowForgotPassword(true)}
+        />
+        <Toaster />
+      </>
+    );
+  }
+
+  // Force password change for new users
+  if (currentUser?.mustChangePassword) {
+    return (
+      <>
+        <ForcePasswordChange />
         <Toaster />
       </>
     );

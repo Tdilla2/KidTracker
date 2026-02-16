@@ -15,6 +15,7 @@ export interface User {
   childIds?: string[];
   parentCode?: string;
   daycareId?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface Daycare {
@@ -41,6 +42,7 @@ interface AuthContextType {
   currentDaycare: Daycare | null;
   login: (username: string, password: string, daycareCode?: string) => Promise<{ success: boolean; daycareName?: string; trialExpired?: boolean }>;
   loginWithParentCode: (code: string) => Promise<boolean>;
+  resetPassword: (daycareCode: string, username: string, email: string) => Promise<{ success: boolean; tempPassword?: string }>;
   logout: () => void;
   addUser: (user: Omit<User, "id" | "createdAt">) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
@@ -72,6 +74,7 @@ const dbToUser = (row: any): User => ({
   childIds: row.child_ids || [],
   parentCode: row.parent_code,
   daycareId: row.daycare_id,
+  mustChangePassword: row.must_change_password ?? false,
 });
 
 const dbToDaycare = (row: any): Daycare => ({
@@ -372,6 +375,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPassword = async (daycareCode: string, username: string, email: string): Promise<{ success: boolean; tempPassword?: string }> => {
+    try {
+      const trimmedUsername = username.trim().toLowerCase();
+      const trimmedEmail = email.trim().toLowerCase();
+      const trimmedCode = daycareCode.trim().toUpperCase();
+
+      // Fetch all users and daycares
+      const [{ data: allUsers }, { data: allDaycares }] = await Promise.all([
+        supabase.from("app_users").select("*"),
+        supabase.from("daycares").select("*"),
+      ]);
+
+      if (!allUsers || !allDaycares) return { success: false };
+
+      // Find the daycare by code
+      const daycareData = allDaycares.find(
+        (dc: any) => dc.daycare_code === trimmedCode && dc.status === "active"
+      );
+      if (!daycareData) return { success: false };
+
+      // Find a matching active user in that daycare
+      const matchingUser = allUsers.find(
+        (u: any) =>
+          u.daycare_id === daycareData.id &&
+          u.status === "active" &&
+          u.username?.toLowerCase() === trimmedUsername &&
+          u.email?.toLowerCase() === trimmedEmail
+      );
+
+      if (!matchingUser) return { success: false };
+
+      // Generate an 8-character random temporary password
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+      let tempPassword = "";
+      for (let i = 0; i < 8; i++) {
+        tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Update the user's password and set must_change_password = true
+      const { error } = await supabase
+        .from("app_users")
+        .update({ password: tempPassword, must_change_password: true })
+        .eq("id", matchingUser.id);
+
+      if (error) {
+        console.error("Error resetting password:", error);
+        return { success: false };
+      }
+
+      // Update local state
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === matchingUser.id
+            ? { ...u, password: tempPassword, mustChangePassword: true }
+            : u
+        )
+      );
+
+      return { success: true, tempPassword };
+    } catch (error) {
+      console.error("Reset password error:", error);
+      return { success: false };
+    }
+  };
+
   const logout = () => {
     // Immediately clear localStorage to prevent stale data
     localStorage.removeItem("kidtracker_current_user");
@@ -399,6 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           child_ids: user.childIds || [],
           parent_code: user.parentCode,
           daycare_id: daycareId,
+          must_change_password: user.mustChangePassword ?? true,
         }])
         .select()
         .single();
@@ -429,6 +498,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (updates.childIds !== undefined) dbUpdates.child_ids = updates.childIds;
       if (updates.parentCode !== undefined) dbUpdates.parent_code = updates.parentCode;
       if (updates.lastLogin !== undefined) dbUpdates.last_login = updates.lastLogin;
+      if (updates.mustChangePassword !== undefined) dbUpdates.must_change_password = updates.mustChangePassword;
 
       const { error } = await supabase
         .from("app_users")
@@ -529,6 +599,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: "admin",
             status: "active",
             daycare_id: newDaycare.id,
+            must_change_password: true,
           }])
           .select()
           .single();
@@ -728,6 +799,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentDaycare,
       login,
       loginWithParentCode,
+      resetPassword,
       logout,
       addUser,
       updateUser,

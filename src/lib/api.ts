@@ -1,7 +1,5 @@
 // AWS API Gateway client for KidTrackerApp
-const API_BASE = import.meta.env.DEV
-  ? '/api'
-  : 'https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api';
+const API_BASE = 'https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api';
 
 interface QueryBuilder {
   select: (columns?: string) => QueryBuilder;

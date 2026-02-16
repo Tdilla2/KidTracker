@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   child_ids JSONB DEFAULT '[]',
   parent_code TEXT,
   last_login TIMESTAMPTZ,
+  must_change_password BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

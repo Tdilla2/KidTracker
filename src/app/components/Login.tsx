@@ -9,9 +9,10 @@ import { toast } from "sonner";
 
 interface LoginProps {
   onStartTrial?: () => void;
+  onForgotPassword?: () => void;
 }
 
-export function Login({ onStartTrial }: LoginProps) {
+export function Login({ onStartTrial, onForgotPassword }: LoginProps) {
   const { login } = useAuth();
   const [daycareCode, setDaycareCode] = useState("");
   const [username, setUsername] = useState("");
@@ -173,25 +174,36 @@ export function Login({ onStartTrial }: LoginProps) {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+
+              {onForgotPassword && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+
+              {onStartTrial && (
+                <div className="text-center pt-2 border-t border-gray-200">
+                  <p className="text-sm text-gray-600">
+                    Don't have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={onStartTrial}
+                      className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                    >
+                      Start your 14-day free trial
+                    </button>
+                  </p>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
-
-        {/* Trial Signup Link */}
-        {onStartTrial && (
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{" "}
-              <button
-                type="button"
-                onClick={onStartTrial}
-                className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
-              >
-                Start your 14-day free trial
-              </button>
-            </p>
-          </div>
-        )}
 
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-500">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, Edit, Trash2, UserPlus, Shield, User as UserIcon, Eye, EyeOff, Mail, Phone, Calendar, CheckCircle, XCircle, Copy, Key } from "lucide-react";
+import { Plus, Search, Edit, Trash2, UserPlus, Shield, User as UserIcon, Eye, EyeOff, Mail, Phone, Calendar, CheckCircle, XCircle, Copy, Key, RotateCcw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -71,6 +71,11 @@ export function ManageUsers() {
       return;
     }
 
+    if (formData.password.length < 8) {
+      toast.error("Password must be at least 8 characters long");
+      return;
+    }
+
     // Check for duplicate username within this daycare (excluding current user if editing)
     const duplicateUser = daycareUsers.find(
       u => u.username === formData.username && u.id !== editingUser?.id
@@ -128,6 +133,30 @@ export function ManageUsers() {
     const newStatus = user.status === "active" ? "inactive" : "active";
     updateUser(user.id, { status: newStatus });
     toast.success(`User ${newStatus === "active" ? "activated" : "deactivated"} successfully`);
+  };
+
+  const handleResetPassword = (user: User) => {
+    if (user.id === currentUser?.id) {
+      toast.error("You cannot reset your own password from here");
+      return;
+    }
+
+    if (!confirm(`Reset password for "${user.fullName}"? They will receive a temporary password and must change it on next login.`)) {
+      return;
+    }
+
+    // Generate an 8-character random temporary password
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+    let tempPassword = "";
+    for (let i = 0; i < 8; i++) {
+      tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    updateUser(user.id, { password: tempPassword, mustChangePassword: true });
+    toast.success(
+      `Password reset for ${user.fullName}. Temporary password: ${tempPassword}`,
+      { duration: 15000 }
+    );
   };
 
   const filteredUsers = daycareUsers.filter(user => {
@@ -270,7 +299,8 @@ export function ManageUsers() {
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Enter password"
+                      placeholder="Min 8 characters"
+                      minLength={8}
                       className="pr-10"
                     />
                     <button
@@ -594,6 +624,15 @@ export function ManageUsers() {
                               onClick={() => handleEdit(user)}
                             >
                               <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResetPassword(user)}
+                              disabled={user.id === currentUser?.id}
+                              title="Reset Password"
+                            >
+                              <RotateCcw className="h-4 w-4 text-orange-600" />
                             </Button>
                             <Button
                               variant="ghost"

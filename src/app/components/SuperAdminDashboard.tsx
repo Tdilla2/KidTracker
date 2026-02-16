@@ -225,8 +225,8 @@ export function SuperAdminDashboard() {
 
     // Validate new password if being changed
     if (isPasswordChanged) {
-      if (settingsForm.newPassword.length < 6) {
-        toast.error("New password must be at least 6 characters");
+      if (settingsForm.newPassword.length < 8) {
+        toast.error("New password must be at least 8 characters");
         return;
       }
       if (settingsForm.newPassword !== settingsForm.confirmPassword) {

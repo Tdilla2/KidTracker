@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Building2, Save, Mail, Phone, Globe, MapPin, Hash, AlertCircle, Copy, Upload, Clock, ImageIcon, X } from "lucide-react";
+import defaultLogo from "../assets/kidtracker-logo.jpg";
 import { formatPhone, maskPhoneInput } from "../../lib/formatPhone";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -474,15 +475,13 @@ export function CompanyInfo() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Logo Display */}
-              {companyInfo.logo && (
-                <div className="flex justify-center pb-2">
-                  <img
-                    src={companyInfo.logo}
-                    alt="Company logo"
-                    className="max-h-24 max-w-[200px] object-contain rounded-lg border p-2"
-                  />
-                </div>
-              )}
+              <div className="flex justify-center pb-2">
+                <img
+                  src={companyInfo.logo || defaultLogo}
+                  alt="Company logo"
+                  className="max-h-24 max-w-[200px] object-contain rounded-lg border p-2"
+                />
+              </div>
 
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Daycare Name</p>
@@ -608,12 +607,8 @@ export function CompanyInfo() {
             <CardContent>
               <div className="rounded-lg bg-gradient-to-r from-blue-50 to-blue-100 p-6 border-2 border-blue-200">
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-700 to-blue-600 rounded-lg shadow-lg flex-shrink-0 overflow-hidden">
-                    {companyInfo.logo ? (
-                      <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain p-1" />
-                    ) : (
-                      <Building2 className="h-8 w-8 text-white" />
-                    )}
+                  <div className="flex items-center justify-center w-16 h-16 bg-white rounded-lg shadow-lg flex-shrink-0 overflow-hidden">
+                    <img src={companyInfo.logo || defaultLogo} alt="Company logo" className="w-full h-full object-contain p-1" />
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">

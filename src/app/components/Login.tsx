@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Users, Lock, User, Eye, EyeOff, Building2 } from "lucide-react";
+import { Lock, User, Eye, EyeOff, Building2 } from "lucide-react";
+import kidtrackerLogo from "../assets/kidtracker-logo.jpg";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -72,12 +73,9 @@ export function Login({ onStartTrial, onForgotPassword }: LoginProps) {
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
-              <Users className="h-10 w-10 text-white" />
-            </div>
+          <div className="flex items-center justify-center mb-2">
+            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="w-48 object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
           <p className="text-blue-700">Powered by GDI Digital Solutions</p>
         </div>
 

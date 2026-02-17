@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LayoutDashboard, Users, Calendar, DollarSign, FileText, BarChart3, UtensilsCrossed, Link, Settings, LogOut, Building2, ClipboardList, School, ArrowLeft, Shield, AlertTriangle } from "lucide-react";
+import defaultLogo from "./assets/kidtracker-logo.jpg";
 import { Button } from "./components/ui/button";
 import { Dashboard } from "./components/Dashboard";
 import { ChildrenManagement } from "./components/ChildrenManagement";
@@ -89,11 +90,7 @@ function AppContent() {
             <div className="flex h-16 items-center px-4 gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-lg overflow-hidden">
-                  {companyInfo.logo ? (
-                    <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain p-1" />
-                  ) : (
-                    <Shield className="h-6 w-6 text-blue-700" />
-                  )}
+                  <img src={companyInfo.logo || defaultLogo} alt="Company logo" className="w-full h-full object-contain p-1" />
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-white">KidTrackerApp™</h1>
@@ -142,11 +139,7 @@ function AppContent() {
             <div className="flex h-16 items-center px-4 gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-lg overflow-hidden">
-                  {companyInfo.logo ? (
-                    <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain p-1" />
-                  ) : (
-                    <Users className="h-6 w-6 text-blue-700" />
-                  )}
+                  <img src={companyInfo.logo || defaultLogo} alt="Company logo" className="w-full h-full object-contain p-1" />
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-white">KidTrackerApp™</h1>
@@ -263,11 +256,7 @@ function AppContent() {
           <div className="flex h-16 items-center px-4 gap-4">
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-lg overflow-hidden">
-                {companyInfo.logo ? (
-                  <img src={companyInfo.logo} alt="Company logo" className="w-full h-full object-contain p-1" />
-                ) : (
-                  <Users className="h-6 w-6 text-blue-700" />
-                )}
+                <img src={companyInfo.logo || defaultLogo} alt="Company logo" className="w-full h-full object-contain p-1" />
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white">KidTrackerApp™</h1>

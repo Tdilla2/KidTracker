@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon, Archive, ArchiveRestore } from "lucide-react";
+import kidtrackerLogo from "../assets/kidtracker-logo.jpg";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -305,9 +306,12 @@ export function SuperAdminDashboard() {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-1">Super Admin Dashboard</h1>
-            <p className="text-blue-50">Manage all daycares in the KidTrackerApp™ system</p>
+          <div className="flex items-center gap-4">
+            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="h-14 object-contain bg-white rounded-lg p-1" />
+            <div>
+              <h1 className="text-2xl font-bold text-white mb-1">Super Admin Dashboard</h1>
+              <p className="text-blue-50">Manage all daycares in the KidTrackerApp™ system</p>
+            </div>
           </div>
           <Button
             className="bg-blue-800 text-white hover:bg-blue-900"

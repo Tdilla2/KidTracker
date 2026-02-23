@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, DollarSign, Baby, FileText, Clock, CheckCircle, XCircle, Camera, Image as ImageIcon, Trash2, Smile, Frown, Meh, Zap, Heart, School, Key, Copy, Smartphone } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -11,12 +11,20 @@ import { Button } from "./ui/button";
 
 export function ParentPortal() {
   const { currentUser } = useAuth();
-  const { children, attendance, invoices, getActivityPhotos, getDailyActivity, classrooms } = useData();
+  const { children, attendance, invoices, activityPhotos, dailyActivities, classrooms, refreshData } = useData();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Re-fetch data whenever the Activity Photos tab is opened so parents see the latest photos
+  useEffect(() => {
+    if (activeTab === "photos") {
+      refreshData();
+    }
+  }, [activeTab]);
 
   // Get children linked to this parent
-  const myChildren = children.filter(child => 
+  const myChildren = children.filter(child =>
     child.parentUserId === currentUser?.id
   );
 
@@ -301,7 +309,7 @@ export function ParentPortal() {
       </div>
 
       {/* Tabs for Attendance and Invoices */}
-      <Tabs defaultValue="attendance" className="space-y-4">
+      <Tabs defaultValue="attendance" className="space-y-4" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="attendance">Attendance History</TabsTrigger>
           <TabsTrigger value="activities">Daily Activities</TabsTrigger>
@@ -445,20 +453,12 @@ export function ParentPortal() {
             <CardContent>
               <div className="space-y-6">
                 {myChildren.map((child) => {
-                  // Get all daily activities for this child (last 30 days)
-                  const allActivities = (() => {
-                    const activities = [];
-                    for (let i = 0; i < 30; i++) {
-                      const date = new Date();
-                      date.setDate(date.getDate() - i);
-                      const dateStr = date.toISOString().split('T')[0];
-                      const dayActivity = getDailyActivity(child.id, dateStr);
-                      if (dayActivity && (dayActivity.bathroomTimes.length > 0 || dayActivity.napStart || dayActivity.mood || dayActivity.teacherNotes)) {
-                        activities.push({ ...dayActivity, date: dateStr });
-                      }
-                    }
-                    return activities;
-                  })();
+                  // Get all daily activities for this child directly from state
+                  const allActivities = dailyActivities
+                    .filter(a => a.childId === child.id && (
+                      a.bathroomTimes.length > 0 || a.napStart || a.mood || a.teacherNotes
+                    ))
+                    .sort((a, b) => b.date.localeCompare(a.date));
 
                   return (
                     <div key={child.id}>
@@ -608,19 +608,8 @@ export function ParentPortal() {
             <CardContent>
               <div className="space-y-6">
                 {myChildren.map((child) => {
-                  // Get all activity photos for this child
-                  const allChildPhotos = (() => {
-                    const photos = [];
-                    // Get photos for last 30 days
-                    for (let i = 0; i < 30; i++) {
-                      const date = new Date();
-                      date.setDate(date.getDate() - i);
-                      const dateStr = date.toISOString().split('T')[0];
-                      const dayPhotos = getActivityPhotos(child.id, dateStr);
-                      photos.push(...dayPhotos);
-                    }
-                    return photos;
-                  })();
+                  // Get all activity photos for this child directly from state
+                  const allChildPhotos = activityPhotos.filter(p => p.childId === child.id && p.photo);
 
                   return (
                     <div key={child.id}>

@@ -35,8 +35,12 @@ export function Financials() {
   });
 
   // Get selected month label for display
+  // Use local date constructor (year, month-1, day) to avoid UTC timezone shifting
   const selectedMonthLabel = !isYearEndReport
-    ? new Date(selectedPeriod + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    ? (() => {
+        const [y, m] = selectedPeriod.split('-').map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      })()
     : '';
 
   // Filter invoices by selected month (based on due date)

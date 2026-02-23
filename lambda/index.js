@@ -3,6 +3,28 @@ const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+
+// ── HTTPS helper (used for QuickBooks API calls) ──────────────────────────────
+function httpsRequest(options, body = null) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// QuickBooks credentials / constants
+const QBO_CLIENT_ID     = 'ABZFDP7PIjWts3kK0IqHbjO1QylLXuVPVhHzCt1p3ZmYzAlRB4';
+const QBO_REDIRECT_URI  = 'https://main.d2nbsjhv8lzch9.amplifyapp.com';
+const QBO_TOKEN_HOST    = 'oauth.platform.intuit.com';
+const QBO_TOKEN_PATH    = '/oauth2/v1/tokens/bearer';
+const QBO_API_HOST      = 'sandbox-quickbooks.api.intuit.com';
 
 const smClient = new SecretsManagerClient({ region: 'us-east-1' });
 
@@ -159,6 +181,364 @@ exports.handler = async (event) => {
 
   try {
     const db = await getPool();
+
+    // ── QuickBooks OAuth + Sync routes (/api/qbo/*) ───────────────────────────
+    if (table === 'qbo') {
+      const qboAction = id; // auth-url | callback | status | sync | disconnect
+      const queryParams = event.queryStringParameters || {};
+      const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET;
+
+      if (!QBO_CLIENT_SECRET) {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'QBO_CLIENT_SECRET env var not set' }) };
+      }
+
+      const b64Creds = Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64');
+
+      // Helper: call QB sandbox API
+      const qboCall = async (accessToken, realmId, method_, apiPath, payload = null) => {
+        const bodyStr = payload ? JSON.stringify(payload) : null;
+        const reqHeaders = {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        };
+        if (bodyStr) reqHeaders['Content-Length'] = Buffer.byteLength(bodyStr);
+        return httpsRequest({
+          hostname: QBO_API_HOST,
+          path: `/v3/company/${realmId}${apiPath}?minorversion=65`,
+          method: method_,
+          headers: reqHeaders,
+        }, bodyStr);
+      };
+
+      // Helper: refresh access token and update DB
+      const refreshToken = async (daycareId, oldRefresh) => {
+        const rbody = `grant_type=refresh_token&refresh_token=${encodeURIComponent(oldRefresh)}`;
+        const res = await httpsRequest({
+          hostname: QBO_TOKEN_HOST, path: QBO_TOKEN_PATH, method: 'POST',
+          headers: { Authorization: `Basic ${b64Creds}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(rbody) },
+        }, rbody);
+        const t = JSON.parse(res.body);
+        if (!t.access_token) throw new Error('Token refresh failed');
+        const expiry = new Date(Date.now() + t.expires_in * 1000).toISOString();
+        await db.query('UPDATE qbo_tokens SET access_token=$1,refresh_token=$2,token_expiry=$3,updated_at=NOW() WHERE daycare_id=$4',
+          [t.access_token, t.refresh_token || oldRefresh, expiry, daycareId]);
+        return t.access_token;
+      };
+
+      // Helper: get a valid (refreshing if needed) access token
+      const getValidToken = async (daycareId) => {
+        const r = await db.query('SELECT * FROM qbo_tokens WHERE daycare_id=$1', [daycareId]);
+        if (!r.rows[0]) throw new Error('Not connected to QuickBooks');
+        const row = r.rows[0];
+        if (new Date(row.token_expiry) < new Date(Date.now() + 5 * 60 * 1000)) {
+          return { accessToken: await refreshToken(daycareId, row.refresh_token), realmId: row.realm_id };
+        }
+        return { accessToken: row.access_token, realmId: row.realm_id };
+      };
+
+      // ── GET /api/qbo/auth-url?daycare_id=XXX&redirect_uri=XXX ───────────
+      if (qboAction === 'auth-url' && method === 'GET') {
+        const ALLOWED_REDIRECTS = [
+          'https://main.d2nbsjhv8lzch9.amplifyapp.com',
+          'http://localhost:5173',
+          'http://localhost:5174',
+        ];
+        const requestedRedirect = queryParams.redirect_uri;
+        const redirectUri = (requestedRedirect && ALLOWED_REDIRECTS.includes(requestedRedirect))
+          ? requestedRedirect
+          : QBO_REDIRECT_URI;
+        const state = encodeURIComponent(queryParams.daycare_id || 'default');
+        const url = `https://appcenter.intuit.com/connect/oauth2`
+          + `?client_id=${QBO_CLIENT_ID}`
+          + `&redirect_uri=${encodeURIComponent(redirectUri)}`
+          + `&response_type=code`
+          + `&scope=com.intuit.quickbooks.accounting`
+          + `&state=${state}`;
+        return { statusCode: 200, headers, body: JSON.stringify({ url }) };
+      }
+
+      // ── POST /api/qbo/callback  body: {code, realmId, daycareId, redirectUri} ──
+      if (qboAction === 'callback' && method === 'POST') {
+        const { code, realmId, daycareId, redirectUri } = body;
+        const ALLOWED_REDIRECTS = [
+          'https://main.d2nbsjhv8lzch9.amplifyapp.com',
+          'http://localhost:5173',
+          'http://localhost:5174',
+        ];
+        const callbackRedirect = (redirectUri && ALLOWED_REDIRECTS.includes(redirectUri))
+          ? redirectUri
+          : QBO_REDIRECT_URI;
+        const rbody = `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(callbackRedirect)}`;
+        const tokenRes = await httpsRequest({
+          hostname: QBO_TOKEN_HOST, path: QBO_TOKEN_PATH, method: 'POST',
+          headers: { Authorization: `Basic ${b64Creds}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(rbody) },
+        }, rbody);
+        const tokens = JSON.parse(tokenRes.body);
+        if (!tokens.access_token) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Token exchange failed', detail: tokenRes.body }) };
+        }
+        const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+        // Fetch company name from QB
+        let companyName = 'QuickBooks Company';
+        try {
+          const infoRes = await qboCall(tokens.access_token, realmId, 'GET', `/companyinfo/${realmId}`);
+          const info = JSON.parse(infoRes.body);
+          companyName = info.CompanyInfo?.CompanyName || companyName;
+        } catch (_) {}
+
+        const did = daycareId || 'default';
+        await db.query(
+          `INSERT INTO qbo_tokens (daycare_id,realm_id,company_name,access_token,refresh_token,token_expiry)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (daycare_id) DO UPDATE SET
+             realm_id=$2,company_name=$3,access_token=$4,refresh_token=$5,token_expiry=$6,updated_at=NOW()`,
+          [did, realmId, companyName, tokens.access_token, tokens.refresh_token, expiry]
+        );
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, companyName, realmId }) };
+      }
+
+      // ── GET /api/qbo/status?daycare_id=XXX ───────────────────────────────
+      if (qboAction === 'status' && method === 'GET') {
+        const r = await db.query('SELECT realm_id,company_name,updated_at FROM qbo_tokens WHERE daycare_id=$1', [queryParams.daycare_id || 'default']);
+        if (!r.rows[0]) return { statusCode: 200, headers, body: JSON.stringify({ connected: false }) };
+        return { statusCode: 200, headers, body: JSON.stringify({ connected: true, companyName: r.rows[0].company_name, realmId: r.rows[0].realm_id, lastSync: r.rows[0].updated_at }) };
+      }
+
+      // ── POST /api/qbo/sync  body: {daycareId, type} ──────────────────────
+      if (qboAction === 'sync' && method === 'POST') {
+        const { daycareId, type } = body; // type: customers | invoices | payments | all
+        const did = daycareId || 'default';
+        const { accessToken, realmId } = await getValidToken(did);
+        const results = {};
+
+        // Sync customers
+        if (type === 'customers' || type === 'all') {
+          const kids = await db.query("SELECT * FROM children WHERE daycare_id=$1 AND status='active'", [did]);
+          let synced = 0;
+          for (const child of kids.rows) {
+            const ex = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, child.id, 'customer']);
+            if (ex.rows[0]) { synced++; continue; }
+            const customerBody = { DisplayName: `${child.first_name} ${child.last_name} Family`, GivenName: child.first_name || '', FamilyName: child.last_name || '' };
+            const res = await qboCall(accessToken, realmId, 'POST', '/customer', customerBody);
+            const qboId = JSON.parse(res.body).Customer?.Id;
+            if (qboId) {
+              await db.query('INSERT INTO qbo_sync_map(daycare_id,local_id,qbo_id,entity_type) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [did, child.id, qboId, 'customer']);
+              synced++;
+            }
+          }
+          results.customers = { synced, total: kids.rows.length };
+        }
+
+        // Sync invoices
+        if (type === 'invoices' || type === 'all') {
+          const invs = await db.query('SELECT * FROM invoices WHERE daycare_id=$1', [did]);
+          let synced = 0;
+          for (const inv of invs.rows) {
+            const ex = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, inv.id, 'invoice']);
+            if (ex.rows[0]) { synced++; continue; }
+            const custMap = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, inv.child_id, 'customer']);
+            if (!custMap.rows[0]) continue;
+            const invBody = {
+              CustomerRef: { value: custMap.rows[0].qbo_id },
+              DueDate: inv.due_date ? new Date(inv.due_date).toISOString().split('T')[0] : undefined,
+              TxnDate: inv.created_at ? new Date(inv.created_at).toISOString().split('T')[0] : undefined,
+              Line: [{ DetailType: 'SalesItemLineDetail', Amount: parseFloat(inv.amount), Description: inv.description || 'Childcare Services', SalesItemLineDetail: { ItemRef: { value: '1' } } }],
+            };
+            const res = await qboCall(accessToken, realmId, 'POST', '/invoice', invBody);
+            const qboId = JSON.parse(res.body).Invoice?.Id;
+            if (qboId) {
+              await db.query('INSERT INTO qbo_sync_map(daycare_id,local_id,qbo_id,entity_type) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [did, inv.id, qboId, 'invoice']);
+              synced++;
+            }
+          }
+          results.invoices = { synced, total: invs.rows.length };
+        }
+
+        // Sync payments (paid invoices only)
+        if (type === 'payments' || type === 'all') {
+          const paid = await db.query("SELECT * FROM invoices WHERE daycare_id=$1 AND status='paid'", [did]);
+          let synced = 0;
+          for (const inv of paid.rows) {
+            const ex = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, inv.id, 'payment']);
+            if (ex.rows[0]) { synced++; continue; }
+            const custMap = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, inv.child_id, 'customer']);
+            const invMap  = await db.query('SELECT qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND local_id=$2 AND entity_type=$3', [did, inv.id, 'invoice']);
+            if (!custMap.rows[0] || !invMap.rows[0]) continue;
+            const payDate = inv.paid_date ? new Date(inv.paid_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+            const payBody = {
+              CustomerRef: { value: custMap.rows[0].qbo_id },
+              TotalAmt: parseFloat(inv.amount),
+              TxnDate: payDate,
+              Line: [{ Amount: parseFloat(inv.amount), LinkedTxn: [{ TxnId: invMap.rows[0].qbo_id, TxnType: 'Invoice' }] }],
+            };
+            const res = await qboCall(accessToken, realmId, 'POST', '/payment', payBody);
+            const qboId = JSON.parse(res.body).Payment?.Id;
+            if (qboId) {
+              await db.query('INSERT INTO qbo_sync_map(daycare_id,local_id,qbo_id,entity_type) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [did, inv.id, qboId, 'payment']);
+              synced++;
+            }
+          }
+          results.payments = { synced, total: paid.rows.length };
+        }
+
+        await db.query('UPDATE qbo_tokens SET updated_at=NOW() WHERE daycare_id=$1', [did]);
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, results }) };
+      }
+
+      // ── POST /api/qbo/import  body: {daycareId} ──────────────────────────
+      // Pulls invoice/payment statuses from QB and updates KidTracker invoices
+      if (qboAction === 'import' && method === 'POST') {
+        const did = body.daycareId || 'default';
+        const { accessToken, realmId } = await getValidToken(did);
+
+        // Fetch all invoices from QB
+        const qbQuery = encodeURIComponent("SELECT * FROM Invoice MAXRESULTS 1000");
+        const qbRes = await httpsRequest({
+          hostname: QBO_API_HOST,
+          path: `/v3/company/${realmId}/query?query=${qbQuery}&minorversion=65`,
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+        });
+        const qbData = JSON.parse(qbRes.body);
+        const qbInvoices = qbData.QueryResponse?.Invoice || [];
+
+        // Fetch all payments from QB
+        const payQuery = encodeURIComponent("SELECT * FROM Payment MAXRESULTS 1000");
+        const payRes = await httpsRequest({
+          hostname: QBO_API_HOST,
+          path: `/v3/company/${realmId}/query?query=${payQuery}&minorversion=65`,
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+        });
+        const payData = JSON.parse(payRes.body);
+        const qbPayments = payData.QueryResponse?.Payment || [];
+
+        // Build set of QB invoice IDs that are fully paid (Balance = 0)
+        const paidQbIds = new Set(
+          qbInvoices.filter(inv => parseFloat(inv.Balance) === 0).map(inv => inv.Id)
+        );
+
+        // Also collect QB invoice IDs linked from payments
+        for (const pmt of qbPayments) {
+          for (const line of (pmt.Line || [])) {
+            for (const linked of (line.LinkedTxn || [])) {
+              if (linked.TxnType === 'Invoice') paidQbIds.add(linked.TxnId);
+            }
+          }
+        }
+
+        // Find KidTracker invoices mapped to those QB invoice IDs
+        const maps = await db.query(
+          "SELECT local_id, qbo_id FROM qbo_sync_map WHERE daycare_id=$1 AND entity_type='invoice'",
+          [did]
+        );
+
+        let updated = 0;
+        const paidLocalIds = [];
+        for (const row of maps.rows) {
+          if (paidQbIds.has(row.qbo_id)) {
+            paidLocalIds.push(row.local_id);
+          }
+        }
+
+        if (paidLocalIds.length > 0) {
+          const placeholders = paidLocalIds.map((_, i) => `$${i + 2}`).join(',');
+          const result = await db.query(
+            `UPDATE invoices SET status='paid', paid_date=COALESCE(paid_date, NOW())
+             WHERE daycare_id=$1 AND id IN (${placeholders}) AND status != 'paid'
+             RETURNING id`,
+            [did, ...paidLocalIds]
+          );
+          updated = result.rowCount;
+        }
+
+        // Also check for new QB invoices not yet in KidTracker (created directly in QB)
+        // Build set of already-mapped QB invoice IDs
+        const mappedQbIds = new Set(maps.rows.map(r => r.qbo_id));
+        const unmappedQbInvoices = qbInvoices.filter(inv => !mappedQbIds.has(inv.Id));
+
+        // Pre-load all children for name-based fallback matching
+        const allChildren = await db.query('SELECT id, first_name, last_name FROM children WHERE daycare_id=$1', [did]);
+
+        // For each unmapped QB invoice, try to match by customer and create in KidTracker
+        let imported = 0;
+        for (const qbInv of unmappedQbInvoices) {
+          const custQbId = qbInv.CustomerRef?.value;
+          const custDisplayName = (qbInv.CustomerRef?.name || '').toLowerCase();
+          if (!custQbId) continue;
+
+          // 1) Try sync map first
+          let childId = null;
+          const custMap = await db.query(
+            "SELECT local_id FROM qbo_sync_map WHERE daycare_id=$1 AND qbo_id=$2 AND entity_type='customer'",
+            [did, custQbId]
+          );
+          if (custMap.rows[0]) {
+            childId = custMap.rows[0].local_id;
+          } else {
+            // 2) Fallback: match QB customer name to a child ("Smith Family" → last name "Smith")
+            for (const child of allChildren.rows) {
+              const lastName = child.last_name.toLowerCase();
+              const fullExpected = `${child.first_name} ${child.last_name} family`.toLowerCase();
+              if (custDisplayName === fullExpected || custDisplayName.includes(lastName)) {
+                childId = child.id;
+                // Save the mapping so future syncs skip this lookup
+                await db.query(
+                  "INSERT INTO qbo_sync_map(daycare_id,local_id,qbo_id,entity_type) VALUES($1,$2,$3,'customer') ON CONFLICT DO NOTHING",
+                  [did, child.id, custQbId]
+                );
+                break;
+              }
+            }
+          }
+          if (!childId) continue;
+          const amount = parseFloat(qbInv.TotalAmt) || 0;
+          const dueDate = qbInv.DueDate || null;
+          const txnDate = qbInv.TxnDate || new Date().toISOString().split('T')[0];
+          const isPaid = parseFloat(qbInv.Balance) === 0;
+          const desc = (qbInv.Line || []).find(l => l.Description)?.Description || 'Imported from QuickBooks';
+          const invoiceNumber = qbInv.DocNumber || `QB-${qbInv.Id}`;
+
+          const ins = await db.query(
+            `INSERT INTO invoices (child_id, daycare_id, amount, description, due_date, status, created_at, paid_date, invoice_number)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+            [childId, did, amount, desc, dueDate, isPaid ? 'paid' : 'pending', txnDate, isPaid ? new Date() : null, invoiceNumber]
+          );
+          const newId = ins.rows[0]?.id;
+          if (newId) {
+            await db.query(
+              "INSERT INTO qbo_sync_map(daycare_id,local_id,qbo_id,entity_type) VALUES($1,$2,$3,'invoice') ON CONFLICT DO NOTHING",
+              [did, newId, qbInv.Id]
+            );
+            imported++;
+          }
+        }
+
+        return { statusCode: 200, headers, body: JSON.stringify({
+          success: true,
+          results: {
+            invoicesUpdatedToPaid: updated,
+            invoicesImportedFromQB: imported,
+            totalQBInvoices: qbInvoices.length,
+            paidInQB: paidQbIds.size,
+          }
+        })};
+      }
+
+      // ── POST /api/qbo/disconnect  body: {daycareId} ──────────────────────
+      if (qboAction === 'disconnect' && method === 'POST') {
+        const did = body.daycareId || 'default';
+        await db.query('DELETE FROM qbo_tokens WHERE daycare_id=$1', [did]);
+        await db.query('DELETE FROM qbo_sync_map WHERE daycare_id=$1', [did]);
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+      }
+
+      return { statusCode: 404, headers, body: JSON.stringify({ error: `Unknown QB action: ${qboAction}` }) };
+    }
+    // ── End QuickBooks routes ─────────────────────────────────────────────────
+
     const encKey = table === 'children' ? await getEncryptionKey() : null;
     let result;
 

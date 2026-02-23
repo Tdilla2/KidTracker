@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download } from "lucide-react";
 import { format } from "date-fns";
 import { formatPhone } from "../../lib/formatPhone";
@@ -336,6 +336,21 @@ export function Invoicing() {
     toast.success('Invoice ready for download');
   };
 
+  // Auto-mark pending invoices as overdue when past due date
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    invoices.forEach(invoice => {
+      if (invoice.status === 'pending') {
+        const dueDate = parseLocalDate(invoice.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+        if (dueDate < today) {
+          updateInvoice(invoice.id, { status: 'overdue' });
+        }
+      }
+    });
+  }, [invoices]);
+
   const activeChildren = children.filter(c => c.status === 'active');
 
   return (
@@ -564,7 +579,7 @@ export function Invoicing() {
                         onClick={() => handleMarkAsOverdue(invoice.id, invoice.invoiceNumber)}
                       >
                         <X className="mr-2 h-4 w-4" />
-                        Mark as Overdue
+                        Overdue
                       </Button>
                     )}
                     <Button size="sm" variant="outline" onClick={() => handleDownloadPDF(invoice)}>

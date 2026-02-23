@@ -386,7 +386,7 @@ export function DataProvider({ children: reactChildren }: { children: ReactNode 
       // Fetch activity photos - fetch all and filter client-side
       const { data: photoRows } = await supabase.from("activity_photos").select("*");
       const filteredPhotos = filterByDaycare(photoRows, daycareId);
-      setActivityPhotos(filteredPhotos.map(dbToActivityPhoto));
+      setActivityPhotos(filteredPhotos.map(row => dbToActivityPhoto(row)));
 
       // Fetch daily activities - fetch all and filter client-side
       const { data: activityRows } = await supabase.from("daily_activities").select("*");
@@ -786,9 +786,14 @@ export function DataProvider({ children: reactChildren }: { children: ReactNode 
       throw error;
     }
 
-    if (data) {
-      setActivityPhotos(prev => [...prev, dbToActivityPhoto(data)]);
-    }
+    setActivityPhotos(prev => [...prev, {
+      id: (data as any)?.id,
+      childId: photo.childId,
+      date: photo.date,
+      photo: photo.photo,
+      caption: photo.caption || '',
+      uploadedAt: (data as any)?.uploaded_at || new Date().toISOString(),
+    }]);
   };
 
   const deleteActivityPhoto = async (id: string) => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Users, Calendar, DollarSign, FileText, BarChart3, UtensilsCrossed, Link, Settings, LogOut, Building2, ClipboardList, School, ArrowLeft, Shield, AlertTriangle } from "lucide-react";
 import defaultLogo from "./assets/kidtracker-logo.jpg";
 import { Button } from "./components/ui/button";
@@ -40,6 +40,31 @@ function AppContent() {
     if (currentUser.role === "user") return "attendance";
     return "dashboard";
   });
+
+  // Detect QuickBooks OAuth callback redirect (?code=...&realmId=...&state=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code    = params.get('code');
+    const realmId = params.get('realmId');
+    const state   = params.get('state');
+    if (!code || !realmId) return;
+
+    // If we're inside the OAuth popup, send data back to the main window and close
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(
+        { type: 'qbo_callback', code, realmId, daycareId: state, redirectUri: window.location.origin },
+        window.location.origin
+      );
+      window.close();
+      return;
+    }
+
+    // Fallback: main window redirect flow (stays logged in via localStorage)
+    if (!isAuthenticated) return;
+    localStorage.setItem('qbo_pending_callback', JSON.stringify({ code, realmId, daycareId: state, redirectUri: window.location.origin }));
+    window.history.replaceState({}, '', window.location.pathname);
+    setCurrentPage('quickbooks');
+  }, [isAuthenticated]);
 
   // Show login or trial signup or forgot password screen if not authenticated
   if (!isAuthenticated) {

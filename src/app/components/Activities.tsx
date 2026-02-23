@@ -8,12 +8,12 @@ import { Textarea } from "./ui/textarea";
 import { Badge } from "./ui/badge";
 import { useData } from "../context/DataContext";
 import type { DailyActivity } from "../context/DataContext";
-import { formatLocalDate } from "../../utils/dateUtils";
+import { formatLocalDate, getTodayString } from "../../utils/dateUtils";
 import { toast } from "sonner";
 
 export function Activities() {
-  const { children, addDailyActivity, updateDailyActivity, getDailyActivity, addActivityPhoto, deleteActivityPhoto, getActivityPhotos } = useData();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const { children, activityPhotos, addDailyActivity, updateDailyActivity, getDailyActivity, addActivityPhoto, deleteActivityPhoto, getActivityPhotos } = useData();
+  const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [searchTerm, setSearchTerm] = useState("");
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -126,37 +126,64 @@ export function Activities() {
     }
   };
 
-  const handlePhotoUpload = (childId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new window.Image();
+        img.onload = () => {
+          // Target max dimension 800px, JPEG quality 0.7 — keeps base64 well under 500KB
+          const MAX = 800;
+          let { width, height } = img;
+          if (width > MAX || height > MAX) {
+            if (width > height) {
+              height = Math.round((height * MAX) / width);
+              width = MAX;
+            } else {
+              width = Math.round((width * MAX) / height);
+              height = MAX;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = reject;
+        img.src = reader.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (childId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file');
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
-      return;
-    }
+    // Reset the input early so re-selecting the same file works
+    event.target.value = '';
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      addActivityPhoto({
+    try {
+      const compressed = await compressImage(file);
+      await addActivityPhoto({
         childId,
         date: selectedDate,
-        photo: base64String,
+        photo: compressed,
         caption: '',
       });
       toast.success('Photo added successfully');
-    };
-    reader.readAsDataURL(file);
-
-    // Reset the input
-    event.target.value = '';
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      toast.error('Failed to upload photo. Please try again.');
+    }
   };
 
   const handleDeletePhoto = (photoId: string) => {
@@ -377,12 +404,12 @@ export function Activities() {
                     />
                   </div>
 
-                  {/* Today's Photos */}
+                  {/* Photos */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <Label className="text-base font-semibold flex items-center gap-2">
                         <Camera className="h-4 w-4" />
-                        Today's Photos
+                        Photos — {selectedDate === getTodayString() ? 'Today' : formatLocalDate(selectedDate)}
                       </Label>
                       {isEditing && (
                         <div>
@@ -407,7 +434,8 @@ export function Activities() {
                     </div>
 
                     {(() => {
-                      const photos = getActivityPhotos(child.id, selectedDate);
+                      const photos = getActivityPhotos(child.id, selectedDate).filter(p => p.photo);
+                      const otherDatesCount = activityPhotos.filter(p => p.childId === child.id && p.date !== selectedDate && p.photo).length;
                       return photos.length > 0 ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                           {photos.map((photo) => (
@@ -429,7 +457,8 @@ export function Activities() {
                                 {new Date(photo.uploadedAt).toLocaleTimeString('en-US', {
                                   hour: 'numeric',
                                   minute: '2-digit',
-                                  hour12: true
+                                  hour12: true,
+                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
                                 })}
                               </p>
                             </div>
@@ -439,7 +468,14 @@ export function Activities() {
                         <div className="flex items-center justify-center p-6 border-2 border-dashed rounded-lg bg-gray-50">
                           <div className="text-center">
                             <Image className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                            <p className="text-sm text-muted-foreground">No photos for today</p>
+                            <p className="text-sm text-muted-foreground">
+                              No photos for {selectedDate === getTodayString() ? 'today' : 'this date'}
+                            </p>
+                            {otherDatesCount > 0 && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                {otherDatesCount} photo{otherDatesCount !== 1 ? 's' : ''} on other dates — change the date above to view
+                              </p>
+                            )}
                             {isEditing && (
                               <p className="text-xs text-muted-foreground mt-1">Click "Add Photo" to upload</p>
                             )}

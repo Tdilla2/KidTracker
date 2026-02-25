@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, Check, X, Download, Settings, Calendar, DollarSign, FileText, AlertCircle, CheckCircle, ExternalLink } from "lucide-react";
+import { RefreshCw, Check, X, Download, Settings, Calendar, DollarSign, FileText, AlertCircle, CheckCircle, ExternalLink, FileSpreadsheet } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -92,6 +92,11 @@ export function QuickBooksIntegration() {
     setIsLoadingStatus(true);
     try {
       const res = await fetch(`${API_BASE}/qbo/status?daycare_id=${encodeURIComponent(daycareId)}`);
+      if (!res.ok) {
+        // 500 usually means QBO tables aren't set up yet — silently set disconnected
+        setConnection({ isConnected: false, companyName: '', realmId: '', lastSync: null });
+        return;
+      }
       const data = await res.json();
       if (data.connected) {
         setConnection({ isConnected: true, companyName: data.companyName, realmId: data.realmId, lastSync: data.lastSync });
@@ -99,7 +104,8 @@ export function QuickBooksIntegration() {
         setConnection({ isConnected: false, companyName: '', realmId: '', lastSync: null });
       }
     } catch {
-      // Silently fail — table may not exist yet
+      // Network error — silently set disconnected
+      setConnection({ isConnected: false, companyName: '', realmId: '', lastSync: null });
     } finally {
       setIsLoadingStatus(false);
     }
@@ -112,6 +118,7 @@ export function QuickBooksIntegration() {
       const res = await fetch(
         `${API_BASE}/qbo/auth-url?daycare_id=${encodeURIComponent(daycareId)}&redirect_uri=${encodeURIComponent(redirectUri)}`
       );
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       if (!data.url) throw new Error(`No URL in response: ${JSON.stringify(data)}`);
@@ -151,15 +158,18 @@ export function QuickBooksIntegration() {
 
   const handleDisconnect = async () => {
     try {
-      await fetch(`${API_BASE}/qbo/disconnect`, {
+      const res = await fetch(`${API_BASE}/qbo/disconnect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ daycareId }),
       });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       setConnection({ isConnected: false, companyName: '', realmId: '', lastSync: null });
+      setSyncHistory([]);
+      localStorage.removeItem('qbo_sync_history');
       toast.info('Disconnected from QuickBooks');
-    } catch {
-      toast.error('Failed to disconnect');
+    } catch (err: any) {
+      toast.error('Failed to disconnect: ' + err.message);
     }
   };
 
@@ -192,7 +202,8 @@ export function QuickBooksIntegration() {
       setConnection(prev => ({ ...prev, lastSync: new Date().toISOString() }));
       toast.success(`QuickBooks sync complete`);
     } catch (err: any) {
-      addHistory('invoice', 'failed', 0, err.message);
+      const historyType = type === 'customers' ? 'customer' : type === 'payments' ? 'payment' : 'invoice';
+      addHistory(historyType === 'all' ? 'invoice' : historyType as SyncHistory['type'], 'failed', 0, err.message);
       toast.error('Sync failed: ' + err.message);
     } finally {
       setIsSyncing(false);
@@ -226,25 +237,49 @@ export function QuickBooksIntegration() {
   };
 
   const exportToExcel = () => {
-    const data = invoices.map(inv => {
+    // QB Online import format — one row per charge line item
+    const rows: Record<string, string | number>[] = [];
+    invoices.forEach(inv => {
       const child = children.find(c => c.id === inv.childId);
-      return {
-        Customer: child ? `${child.firstName} ${child.lastName} Family` : 'Unknown',
-        'Invoice Date': inv.createdAt,
-        'Due Date': inv.dueDate,
-        Description: inv.description,
-        Quantity: 1,
-        'Unit Price': inv.amount,
-        'Total Amount': inv.amount,
-        Status: inv.status,
-      };
+      const customerName = child ? `${child.firstName} ${child.lastName} Family` : 'Unknown';
+      const invoiceDate = new Date(inv.createdAt).toLocaleDateString('en-US');
+      const dueDate = new Date(inv.dueDate + 'T00:00:00').toLocaleDateString('en-US');
+
+      // Parse "Monthly Tuition: $450.00, Lunch Plan: $80.00" into individual line items
+      const lines = inv.description
+        ? inv.description.split(', ').map(seg => {
+            const match = seg.match(/^(.+):\s*\$?([\d.]+)$/);
+            if (match) return { item: match[1].trim(), amount: parseFloat(match[2]) };
+            return { item: seg.trim(), amount: inv.amount };
+          })
+        : [{ item: 'Childcare Services', amount: inv.amount }];
+
+      lines.forEach(line => {
+        rows.push({
+          '*InvoiceNo': inv.invoiceNumber,
+          '*Customer': customerName,
+          '*InvoiceDate': invoiceDate,
+          '*DueDate': dueDate,
+          '*ItemName': line.item,
+          'ItemDescription': line.item,
+          '*Qty': 1,
+          '*Rate': line.amount,
+          'Amount': line.amount,
+          '*Tax': 'NON',
+          'Status': inv.status,
+        });
+      });
     });
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
+      { wch: 22 }, { wch: 28 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 10 },
+    ];
     XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
     XLSX.writeFile(wb, `quickbooks-export-${new Date().toISOString().split('T')[0]}.xlsx`);
-    toast.success('Exported to Excel');
+    toast.success(`Exported ${rows.length} line item(s) to QB-importable Excel`);
   };
 
   const stats = {
@@ -424,8 +459,8 @@ export function QuickBooksIntegration() {
                       {isImporting ? 'Importing...' : 'Import from QB'}
                     </Button>
                     <Button variant="outline" onClick={exportToExcel}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Export to Excel
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Export to QB Excel
                     </Button>
                   </div>
                 </CardContent>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download } from "lucide-react";
+import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download, FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 import { formatPhone } from "../../lib/formatPhone";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -142,6 +143,84 @@ export function Invoicing() {
     }, 0);
   };
 
+  // Export current draft charges to QB-importable Excel (one row per line item)
+  const handleExportDraftToQB = () => {
+    if (!selectedChildId || selectedDescriptions.length === 0) {
+      toast.error("Please select a child and at least one charge first");
+      return;
+    }
+    const child = children.find(c => c.id === selectedChildId);
+    const customerName = child ? `${child.firstName} ${child.lastName} Family` : "Unknown";
+    const invoiceDate = format(new Date(), "MM/dd/yyyy");
+    const dueDateFmt = formData.dueDate
+      ? format(parseLocalDate(formData.dueDate), "MM/dd/yyyy")
+      : format(new Date(), "MM/dd/yyyy");
+    const invoiceNo = `INV-${Date.now()}`;
+
+    const rows = selectedDescriptions.map((item) => ({
+      "*InvoiceNo": invoiceNo,
+      "*Customer": customerName,
+      "*InvoiceDate": invoiceDate,
+      "*DueDate": dueDateFmt,
+      "*ItemName": item,
+      "ItemDescription": item,
+      "*Qty": 1,
+      "*Rate": parseFloat(descriptionAmounts[item] || "0"),
+      "Amount": parseFloat(descriptionAmounts[item] || "0"),
+      "*Tax": "NON",
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
+      { wch: 22 }, { wch: 28 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+    XLSX.writeFile(wb, `qb-invoice-${customerName.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast.success("QB Excel file exported — ready to import into QuickBooks");
+  };
+
+  // Export an existing saved invoice to QB-importable Excel (one row per line item)
+  const handleExportInvoiceToQB = (invoice: Invoice) => {
+    const child = children.find(c => c.id === invoice.childId);
+    const customerName = child ? `${child.firstName} ${child.lastName} Family` : "Unknown";
+    const invoiceDate = format(new Date(invoice.createdAt), "MM/dd/yyyy");
+    const dueDateFmt = format(parseLocalDate(invoice.dueDate), "MM/dd/yyyy");
+
+    // Parse "Monthly Tuition: $450.00, Lunch Plan: $80.00" into individual rows
+    const lines = invoice.description
+      ? invoice.description.split(", ").map((seg) => {
+          const match = seg.match(/^(.+):\s*\$?([\d.]+)$/);
+          if (match) return { item: match[1].trim(), amount: parseFloat(match[2]) };
+          return { item: seg.trim(), amount: invoice.amount };
+        })
+      : [{ item: "Childcare Services", amount: invoice.amount }];
+
+    const rows = lines.map((line) => ({
+      "*InvoiceNo": invoice.invoiceNumber,
+      "*Customer": customerName,
+      "*InvoiceDate": invoiceDate,
+      "*DueDate": dueDateFmt,
+      "*ItemName": line.item,
+      "ItemDescription": line.item,
+      "*Qty": 1,
+      "*Rate": line.amount,
+      "Amount": line.amount,
+      "*Tax": "NON",
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
+      { wch: 22 }, { wch: 28 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+    XLSX.writeFile(wb, `qb-invoice-${invoice.invoiceNumber}-${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast.success(`QB Excel exported for Invoice #${invoice.invoiceNumber}`);
+  };
+
   const handleMarkAsPaid = (invoiceId: string, invoiceNumber: string) => {
     updateInvoice(invoiceId, {
       status: 'paid',
@@ -157,7 +236,7 @@ export function Invoicing() {
 
   const handleDownloadPDF = (invoice: any) => {
     const child = children.find(c => c.id === invoice.childId);
-    
+
     // Create a printable invoice window
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -268,7 +347,7 @@ export function Invoicing() {
             <h1>KidTrackerApp™</h1>
             <p>Powered by GDI Digital Solutions</p>
           </div>
-          
+
           <div class="invoice-details">
             <div class="section">
               <div class="section-title">Invoice Number</div>
@@ -359,7 +438,7 @@ export function Invoicing() {
         <h1 className="text-white">Invoicing</h1>
         <p className="text-blue-50">Create and manage invoices</p>
       </div>
-      
+
       <div className="flex items-center justify-between">
         <div></div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -474,9 +553,19 @@ export function Invoicing() {
                 )}
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-green-500 text-green-700 hover:bg-green-50"
+                  disabled={!selectedChildId || selectedDescriptions.length === 0}
+                  onClick={handleExportDraftToQB}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Export for QuickBooks
                 </Button>
                 <Button
                   type="submit"
@@ -585,6 +674,15 @@ export function Invoicing() {
                     <Button size="sm" variant="outline" onClick={() => handleDownloadPDF(invoice)}>
                       <Download className="mr-2 h-4 w-4" />
                       Download PDF
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-green-500 text-green-700 hover:bg-green-50"
+                      onClick={() => handleExportInvoiceToQB(invoice)}
+                    >
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Export to QB
                     </Button>
                   </div>
                 </div>

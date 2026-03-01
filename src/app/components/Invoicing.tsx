@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download, FileSpreadsheet } from "lucide-react";
+import { FileText, Plus, DollarSign, Calendar as CalendarIcon, Search, Check, X, Download, FileSpreadsheet, Edit } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 import { formatPhone } from "../../lib/formatPhone";
@@ -36,6 +36,7 @@ export function Invoicing() {
   const { children, invoices, addInvoice, updateInvoice } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [selectedDescriptions, setSelectedDescriptions] = useState<string[]>([]);
@@ -80,14 +81,24 @@ export function Invoicing() {
       .map(item => `${item}: $${(parseFloat(descriptionAmounts[item] || '0')).toFixed(2)}`)
       .join(', ');
 
-    addInvoice({
-      childId: selectedChildId,
-      amount: invoiceAmount,
-      dueDate: formData.dueDate,
-      description: invoiceDescription,
-    });
+    if (editingInvoice) {
+      updateInvoice(editingInvoice.id, {
+        childId: selectedChildId,
+        amount: invoiceAmount,
+        dueDate: formData.dueDate,
+        description: invoiceDescription,
+      });
+      toast.success(`Invoice #${editingInvoice.invoiceNumber} updated`);
+    } else {
+      addInvoice({
+        childId: selectedChildId,
+        amount: invoiceAmount,
+        dueDate: formData.dueDate,
+        description: invoiceDescription,
+      });
+      toast.success(`Invoice created for ${child?.firstName}: $${invoiceAmount.toFixed(2)}`);
+    }
 
-    toast.success(`Invoice created for ${child?.firstName}: $${invoiceAmount.toFixed(2)}`);
     resetForm();
     setIsDialogOpen(false);
   };
@@ -99,6 +110,34 @@ export function Invoicing() {
     setSelectedChildId("");
     setSelectedDescriptions([]);
     setDescriptionAmounts({});
+    setEditingInvoice(null);
+  };
+
+  // Open edit dialog pre-populated with existing invoice data
+  const handleEditInvoice = (invoice: Invoice) => {
+    setEditingInvoice(invoice);
+    setSelectedChildId(invoice.childId);
+    setFormData({ dueDate: invoice.dueDate });
+
+    // Parse description "Monthly Tuition: $450.00, Lunch Plan: $80.00" back into selections
+    if (invoice.description) {
+      const descriptions: string[] = [];
+      const amounts: Record<string, string> = {};
+      invoice.description.split(", ").forEach((seg) => {
+        const match = seg.match(/^(.+):\s*\$?([\d.]+)$/);
+        if (match) {
+          descriptions.push(match[1].trim());
+          amounts[match[1].trim()] = match[2];
+        }
+      });
+      setSelectedDescriptions(descriptions);
+      setDescriptionAmounts(amounts);
+    } else {
+      setSelectedDescriptions([]);
+      setDescriptionAmounts({});
+    }
+
+    setIsDialogOpen(true);
   };
 
   // Handle child selection - auto-populate recurring charges if available
@@ -453,9 +492,9 @@ export function Invoicing() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Invoice</DialogTitle>
+              <DialogTitle>{editingInvoice ? `Edit Invoice #${editingInvoice.invoiceNumber}` : "Create New Invoice"}</DialogTitle>
               <DialogDescription>
-                Select a child and add charges for their invoice.
+                {editingInvoice ? "Update the charges and details for this invoice." : "Select a child and add charges for their invoice."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -557,21 +596,23 @@ export function Invoicing() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-green-500 text-green-700 hover:bg-green-50"
-                  disabled={!selectedChildId || selectedDescriptions.length === 0}
-                  onClick={handleExportDraftToQB}
-                >
-                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                  Export for QuickBooks
-                </Button>
+                {!editingInvoice && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-green-500 text-green-700 hover:bg-green-50"
+                    disabled={!selectedChildId || selectedDescriptions.length === 0}
+                    onClick={handleExportDraftToQB}
+                  >
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    Export for QuickBooks
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   disabled={!selectedChildId || !formData.dueDate || selectedDescriptions.length === 0}
                 >
-                  Create Invoice
+                  {editingInvoice ? "Save Changes" : "Create Invoice"}
                 </Button>
               </DialogFooter>
             </form>
@@ -651,7 +692,17 @@ export function Invoicing() {
                     </div>
                   )}
 
-                  <div className="flex gap-2 pt-4 border-t">
+                  <div className="flex flex-wrap gap-2 pt-4 border-t">
+                    {(invoice.status === 'pending' || invoice.status === 'overdue') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditInvoice(invoice)}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                    )}
                     {invoice.status !== 'paid' && (
                       <Button
                         size="sm"

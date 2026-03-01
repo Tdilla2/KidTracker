@@ -98,9 +98,9 @@ export function Attendance() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <h1 className="text-white">Attendance Tracking</h1>
-        <p className="text-blue-50">Track daily check-ins and check-outs</p>
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <h1 className="text-white text-xl sm:text-3xl">Attendance Tracking</h1>
+        <p className="text-blue-50 text-xs sm:text-base">Track daily check-ins and check-outs</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -170,11 +170,11 @@ export function Attendance() {
               return (
                 <div
                   key={child.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-lg gap-2"
                 >
-                  <div className="flex-1">
-                    <p className="font-medium">{child.firstName} {child.lastName}</p>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm sm:text-base">{child.firstName} {child.lastName}</p>
+                    <div className="flex items-center gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-muted-foreground">
                       {attendanceRecord && attendanceRecord.checkIn && (
                         <>
                           <span className="flex items-center gap-1">
@@ -198,18 +198,21 @@ export function Attendance() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {!attendanceRecord && (
                       <>
                         <Button
+                          size="sm"
                           onClick={() => handleCheckIn(child.id, `${child.firstName} ${child.lastName}`)}
-                          className="bg-green-600 hover:bg-green-700"
+                          className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm"
                         >
                           Check In
                         </Button>
                         <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => handleMarkAbsent(child.id, `${child.firstName} ${child.lastName}`)}
+                          className="text-xs sm:text-sm"
                         >
                           Mark Absent
                         </Button>
@@ -219,8 +222,10 @@ export function Attendance() {
                       <>
                         <Badge className="bg-green-600">Present</Badge>
                         <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => handleCheckOut(child.id, `${child.firstName} ${child.lastName}`)}
+                          className="text-xs sm:text-sm"
                         >
                           Check Out
                         </Button>
@@ -247,9 +252,9 @@ export function Attendance() {
 
       {/* Daily Activity Photos */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Today's Activity Photos</CardTitle>
-          <p className="text-sm text-muted-foreground">Share photos of daily activities with parents</p>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <CardTitle className="text-base sm:text-lg">Today's Activity Photos</CardTitle>
+          <p className="text-xs sm:text-sm text-muted-foreground">Share photos of daily activities with parents</p>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

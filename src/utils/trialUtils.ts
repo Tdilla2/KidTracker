@@ -1,4 +1,5 @@
 export type SubscriptionStatus = "trial" | "active" | "expired";
+export type SubscriptionPlan = "none" | "starter" | "professional" | "enterprise";
 
 export interface TrialInfo {
   isOnTrial: boolean;
@@ -75,4 +76,27 @@ export function computeTrialEndDate(): string {
   const date = new Date();
   date.setDate(date.getDate() + 14);
   return date.toISOString();
+}
+
+/** Returns the max children allowed for a given plan (Infinity = unlimited) */
+export function getChildLimit(plan: SubscriptionPlan | undefined): number {
+  switch (plan) {
+    case "starter": return 25;
+    case "professional": return 75;
+    case "enterprise": return Infinity;
+    default: return Infinity; // trial / legacy / none = unlimited during trial
+  }
+}
+
+/** Check if a subscription plan has access to a specific feature */
+export function hasFeatureAccess(plan: SubscriptionPlan | undefined, feature: string): boolean {
+  const planOrDefault = plan || "none";
+
+  const featureMatrix: Record<string, SubscriptionPlan[]> = {
+    quickbooks: ["professional", "enterprise"],
+  };
+
+  const allowedPlans = featureMatrix[feature];
+  if (!allowedPlans) return true;
+  return allowedPlans.includes(planOrDefault);
 }

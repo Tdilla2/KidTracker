@@ -118,26 +118,26 @@ export function Financials() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <h1 className="text-white">Financials</h1>
-        <p className="text-blue-50">Overview of revenue and payments</p>
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <h1 className="text-white text-xl sm:text-3xl">Financials</h1>
+        <p className="text-blue-50 text-xs sm:text-base">Overview of revenue and payments</p>
       </div>
 
       {/* Period Selector */}
       <Card className="border-blue-200">
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-lg flex items-center gap-2">
+              <h3 className="font-semibold text-base sm:text-lg flex items-center gap-2">
                 {isYearEndReport && <BarChart3 className="h-5 w-5 text-blue-700" />}
                 {isYearEndReport ? `Year-End Financial Report - ${selectedYear}` : `Monthly Financial Report`}
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {isYearEndReport ? `Annual summary for ${selectedYear}` : `Viewing data for ${selectedMonthLabel}`}
               </p>
             </div>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -164,7 +164,7 @@ export function Financials() {
       {/* Monthly Report Content */}
       {!isYearEndReport && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-blue-900">Month Revenue</CardTitle>
@@ -314,7 +314,7 @@ export function Financials() {
       {isYearEndReport && selectedYear && (
         <>
           {/* Year Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <Card className="border-green-200 bg-gradient-to-br from-green-50 to-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-green-900">Year Revenue</CardTitle>

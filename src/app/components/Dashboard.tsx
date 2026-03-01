@@ -1,10 +1,21 @@
-import { Users, DollarSign, Calendar, TrendingUp, Building2, Clock, CheckCircle, XCircle, UserX } from "lucide-react";
+import { Users, DollarSign, Calendar, TrendingUp, Building2, Clock, CheckCircle, XCircle, UserX, AlertTriangle, CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { getTrialInfo } from "../../utils/trialUtils";
 import { UserGuide } from "./UserGuide";
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const { children, attendance, invoices, companyInfo } = useData();
+  const { currentDaycare } = useAuth();
+
+  // Get trial info
+  const trialInfo = currentDaycare ? getTrialInfo(currentDaycare) : null;
 
   // Calculate statistics
   const totalChildren = children.length;
@@ -38,31 +49,60 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
         {companyInfo.name ? (
           <>
-            <div className="flex items-center gap-3 mb-2">
-              <Building2 className="h-8 w-8 text-white" />
-              <h1 className="text-white text-3xl">{companyInfo.name}</h1>
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-white shrink-0" />
+              <h1 className="text-white text-xl sm:text-3xl">{companyInfo.name}</h1>
             </div>
-            <p className="text-blue-50">Dashboard Overview - {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p className="text-blue-50 text-xs sm:text-base">Dashboard Overview - {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
           </>
         ) : (
           <>
-            <h1 className="text-white">Dashboard</h1>
-            <p className="text-blue-50">Welcome to KidTrackerApp™ - Your daycare management solution</p>
+            <h1 className="text-white text-xl sm:text-3xl">Dashboard</h1>
+            <p className="text-blue-50 text-xs sm:text-base">Welcome to KidTrackerApp™ - Your daycare management solution</p>
           </>
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Trial Banner */}
+      {trialInfo?.isOnTrial && (
+        <Card className="border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-md">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <h3 className="font-semibold text-amber-900 text-sm sm:text-base">
+                    Free Trial — {trialInfo.daysRemaining} {trialInfo.daysRemaining === 1 ? "day" : "days"} remaining
+                  </h3>
+                  <p className="text-xs sm:text-sm text-amber-700 mt-0.5">
+                    Your trial ends on {new Date(trialInfo.trialEndsAt!).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
+                    Choose a plan to keep using KidTrackerApp.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => onNavigate?.("billing")}
+                className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold shadow-md shrink-0"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Choose a Plan
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Total Children</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-blue-900">Total Children</CardTitle>
             <Users className="h-4 w-4 text-blue-700" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-800">{activeChildren}</div>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-800">{activeChildren}</div>
             <p className="text-xs text-blue-700">
               {totalChildren} total enrolled
             </p>
@@ -70,12 +110,12 @@ export function Dashboard() {
         </Card>
 
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Present Today</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-blue-900">Present Today</CardTitle>
             <Calendar className="h-4 w-4 text-blue-700" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-800">{presentToday}</div>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-800">{presentToday}</div>
             <p className="text-xs text-blue-700">
               Out of {activeChildren} active
             </p>
@@ -83,12 +123,12 @@ export function Dashboard() {
         </Card>
 
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Total Revenue</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-blue-900">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-700" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-800">${totalRevenue.toFixed(2)}</div>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-800">${totalRevenue.toFixed(2)}</div>
             <p className="text-xs text-blue-700">
               Paid invoices
             </p>
@@ -96,12 +136,12 @@ export function Dashboard() {
         </Card>
 
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Pending Payments</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-blue-900">Pending Payments</CardTitle>
             <TrendingUp className="h-4 w-4 text-blue-700" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-800">${pendingRevenue.toFixed(2)}</div>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-800">${pendingRevenue.toFixed(2)}</div>
             <p className="text-xs text-blue-700">
               {invoices.filter(inv => inv.status === 'pending').length} invoices
             </p>
@@ -118,37 +158,37 @@ export function Dashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
             {/* Checked In */}
-            <div className="flex flex-col items-center p-4 bg-green-50 border-2 border-green-200 rounded-lg">
-              <CheckCircle className="h-8 w-8 text-green-600 mb-2" />
-              <div className="text-3xl font-bold text-green-700">{todayCheckedIn}</div>
-              <div className="text-sm text-green-600 font-medium">Checked In</div>
-              <div className="text-xs text-muted-foreground mt-1">Currently present</div>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+              <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 mb-1 sm:mb-2" />
+              <div className="text-2xl sm:text-3xl font-bold text-green-700">{todayCheckedIn}</div>
+              <div className="text-xs sm:text-sm text-green-600 font-medium">Checked In</div>
+              <div className="text-xs text-muted-foreground mt-1 hidden sm:block">Currently present</div>
             </div>
 
             {/* Checked Out */}
-            <div className="flex flex-col items-center p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-              <Clock className="h-8 w-8 text-blue-600 mb-2" />
-              <div className="text-3xl font-bold text-blue-700">{todayCheckedOut}</div>
-              <div className="text-sm text-blue-600 font-medium">Checked Out</div>
-              <div className="text-xs text-muted-foreground mt-1">Already left</div>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+              <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 mb-1 sm:mb-2" />
+              <div className="text-2xl sm:text-3xl font-bold text-blue-700">{todayCheckedOut}</div>
+              <div className="text-xs sm:text-sm text-blue-600 font-medium">Checked Out</div>
+              <div className="text-xs text-muted-foreground mt-1 hidden sm:block">Already left</div>
             </div>
 
             {/* Absent */}
-            <div className="flex flex-col items-center p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
-              <XCircle className="h-8 w-8 text-orange-600 mb-2" />
-              <div className="text-3xl font-bold text-orange-700">{todayAbsent}</div>
-              <div className="text-sm text-orange-600 font-medium">Absent</div>
-              <div className="text-xs text-muted-foreground mt-1">Not present today</div>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
+              <XCircle className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600 mb-1 sm:mb-2" />
+              <div className="text-2xl sm:text-3xl font-bold text-orange-700">{todayAbsent}</div>
+              <div className="text-xs sm:text-sm text-orange-600 font-medium">Absent</div>
+              <div className="text-xs text-muted-foreground mt-1 hidden sm:block">Not present today</div>
             </div>
 
             {/* Weekly Rate */}
-            <div className="flex flex-col items-center p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
-              <TrendingUp className="h-8 w-8 text-purple-600 mb-2" />
-              <div className="text-3xl font-bold text-purple-700">{weeklyAttendanceRate}%</div>
-              <div className="text-sm text-purple-600 font-medium">Weekly Rate</div>
-              <div className="text-xs text-muted-foreground mt-1">Last 7 days</div>
+            <div className="flex flex-col items-center p-3 sm:p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
+              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600 mb-1 sm:mb-2" />
+              <div className="text-2xl sm:text-3xl font-bold text-purple-700">{weeklyAttendanceRate}%</div>
+              <div className="text-xs sm:text-sm text-purple-600 font-medium">Weekly Rate</div>
+              <div className="text-xs text-muted-foreground mt-1 hidden sm:block">Last 7 days</div>
             </div>
           </div>
 

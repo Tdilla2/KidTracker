@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Users, Building2, User, Mail, Phone, MapPin, ArrowLeft, Copy, Check, PartyPopper } from "lucide-react";
+import { Users, Building2, User, Mail, Phone, MapPin, ArrowLeft, Copy, Check, PartyPopper, CreditCard } from "lucide-react";
 import { maskPhoneInput } from "../../lib/formatPhone";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { useAuth } from "../context/AuthContext";
+import { PricingPage } from "./PricingPage";
 import { toast } from "sonner";
 
 interface TrialSignupProps {
@@ -13,6 +14,7 @@ interface TrialSignupProps {
 }
 
 interface SignupResult {
+  daycareId: string;
   daycareCode: string;
   adminUsername: string;
   adminPassword: string;
@@ -24,6 +26,8 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [signupResult, setSignupResult] = useState<SignupResult | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
+  const [submitIntent, setSubmitIntent] = useState<"trial" | "pay">("trial");
 
   // Form fields
   const [daycareName, setDaycareName] = useState("");
@@ -41,24 +45,24 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const validateForm = (): boolean => {
     if (!daycareName.trim()) {
       toast.error("Daycare name is required");
-      return;
+      return false;
     }
     if (!ownerName.trim()) {
       toast.error("Owner name is required");
-      return;
+      return false;
     }
     if (!email.trim()) {
       toast.error("Email is required");
-      return;
+      return false;
     }
+    return true;
+  };
 
+  const createDaycare = async (): Promise<SignupResult | null> => {
     setIsLoading(true);
-
     try {
       const newDaycare = await addDaycare({
         name: daycareName.trim(),
@@ -73,51 +77,108 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
       });
 
       const code = newDaycare.daycareCode;
-      setSignupResult({
+      const result: SignupResult = {
+        daycareId: newDaycare.id,
         daycareCode: code,
         adminUsername: `admin_${code.toLowerCase()}`,
         adminPassword: "Password123!",
         daycareName: newDaycare.name,
-      });
-
-      toast.success("Your free trial has been created!");
+      };
+      setSignupResult(result);
+      return result;
     } catch (error) {
       console.error("Signup error:", error);
-      toast.error("Failed to create your trial. Please try again.");
+      toast.error("Failed to create your account. Please try again.");
+      return null;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Success screen after signup
+  const handleTrialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    const result = await createDaycare();
+    if (result) {
+      toast.success("Your free trial has been created!");
+    }
+  };
+
+  const handlePaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    const result = await createDaycare();
+    if (result) {
+      toast.success("Account created! Choose your plan.");
+      setShowPricing(true);
+    }
+  };
+
+  // Pricing page (after choosing to pay)
+  if (signupResult && showPricing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
+        {/* Credentials banner at top so they don't lose them */}
+        <div className="bg-green-50 border-b border-green-200 px-3 sm:px-4 py-2 sm:py-3">
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm">
+            <span className="text-green-700 font-medium">Your credentials:</span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="font-mono bg-white px-2 py-1 rounded border text-green-800">
+                Code: {signupResult.daycareCode}
+              </span>
+              <span className="font-mono bg-white px-2 py-1 rounded border text-green-800">
+                User: {signupResult.adminUsername}
+              </span>
+              <span className="font-mono bg-white px-2 py-1 rounded border text-green-800">
+                Pass: {signupResult.adminPassword}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="py-4 sm:py-8">
+          <PricingPage
+            daycareId={signupResult.daycareId}
+            daycareName={signupResult.daycareName}
+            onSkip={onBackToLogin}
+            isPostSignup={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Success screen (free trial path)
   if (signupResult) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-3 sm:p-4">
         <div className="w-full max-w-md">
           {/* Logo and Branding */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center mb-4">
-              <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
-                <PartyPopper className="h-10 w-10 text-white" />
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="flex items-center justify-center mb-3 sm:mb-4">
+              <div className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
+                <PartyPopper className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
-            <p className="text-blue-700">Powered by GDI Digital Solutions</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
+            <p className="text-sm sm:text-base text-blue-700">Powered by GDI Digital Solutions</p>
           </div>
 
           <Card className="border-2 border-green-200 shadow-xl">
-            <CardHeader className="space-y-1 text-center">
-              <CardTitle className="text-2xl text-green-700">Your 14-day free trial has started!</CardTitle>
+            <CardHeader className="space-y-1 text-center px-4 sm:px-6">
+              <CardTitle className="text-xl sm:text-2xl text-green-700">Your 14-day free trial has started!</CardTitle>
               <CardDescription>
                 Welcome, <strong>{signupResult.daycareName}</strong>! Here are your login credentials.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               {/* Daycare Code */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                <p className="text-sm text-blue-600 mb-1">Your Daycare Code</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 text-center">
+                <p className="text-xs sm:text-sm text-blue-600 mb-1">Your Daycare Code</p>
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-2xl font-bold font-mono tracking-widest text-blue-800">
+                  <span className="text-xl sm:text-2xl font-bold font-mono tracking-widest text-blue-800">
                     {signupResult.daycareCode}
                   </span>
                   <button
@@ -177,6 +238,14 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
               >
                 Go to Login
               </Button>
+
+              <button
+                type="button"
+                onClick={() => setShowPricing(true)}
+                className="w-full text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                Or view plans & subscribe now
+              </button>
             </CardContent>
           </Card>
 
@@ -189,28 +258,28 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
     );
   }
 
-  // Registration form
+  // Registration form with TWO paths
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-3 sm:p-4">
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
-              <Users className="h-10 w-10 text-white" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex items-center justify-center mb-3 sm:mb-4">
+            <div className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
+              <Users className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
-          <p className="text-blue-700">Powered by GDI Digital Solutions</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
+          <p className="text-sm sm:text-base text-blue-700">Powered by GDI Digital Solutions</p>
         </div>
 
         <Card className="border-2 border-blue-200 shadow-xl">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl">Start Your Free Trial</CardTitle>
-            <CardDescription>Get 14 days of full access — no credit card required</CardDescription>
+          <CardHeader className="space-y-1 text-center px-4 sm:px-6">
+            <CardTitle className="text-xl sm:text-2xl">Create Your Daycare Account</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Start with a free trial or subscribe to a plan</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="px-4 sm:px-6">
+            <form onSubmit={(e) => { e.preventDefault(); submitIntent === "pay" ? handlePaySubmit(e) : handleTrialSubmit(e); }} className="space-y-4">
               {/* Daycare Name */}
               <div className="space-y-2">
                 <Label htmlFor="signup-daycare-name">Daycare Name <span className="text-red-500">*</span></Label>
@@ -339,13 +408,44 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700"
-                disabled={isLoading}
-              >
-                {isLoading ? "Creating your trial..." : "Start Free Trial"}
-              </Button>
+              {/* Divider */}
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">Choose how to get started</span>
+                </div>
+              </div>
+
+              {/* Two submit buttons */}
+              <div className="space-y-3">
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700"
+                  disabled={isLoading}
+                  onClick={() => setSubmitIntent("trial")}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  {isLoading && submitIntent === "trial" ? "Creating..." : "Start 14-Day Free Trial"}
+                </Button>
+
+                <div className="text-center text-xs text-gray-400">or</div>
+
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="w-full border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
+                  disabled={isLoading}
+                  onClick={() => setSubmitIntent("pay")}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  {isLoading && submitIntent === "pay" ? "Creating..." : "Subscribe & Pay Upfront"}
+                </Button>
+                <p className="text-xs text-center text-gray-500">
+                  Plans from <strong>$199/mo</strong> — Starter, Professional, Enterprise
+                </p>
+              </div>
             </form>
 
             <div className="mt-4 text-center">

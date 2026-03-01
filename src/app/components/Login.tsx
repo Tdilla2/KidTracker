@@ -69,23 +69,23 @@ export function Login({ onStartTrial, onForgotPassword }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-3 sm:p-4">
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="flex items-center justify-center mb-2">
-            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="w-48 object-contain" />
+            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="w-36 sm:w-48 object-contain" />
           </div>
-          <p className="text-blue-700">Powered by GDI Digital Solutions</p>
+          <p className="text-sm sm:text-base text-blue-700">Powered by GDI Digital Solutions</p>
         </div>
 
         {/* Login Card */}
         <Card className="border-2 border-blue-200 shadow-xl">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl">Welcome Back</CardTitle>
-            <CardDescription>Sign in to your KidTrackerApp™ account</CardDescription>
+          <CardHeader className="space-y-1 text-center px-4 sm:px-6">
+            <CardTitle className="text-xl sm:text-2xl">Welcome Back</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Sign in to your KidTrackerApp™ account</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               {/* Hidden fields to trick browser autofill */}
               <input type="text" name="prevent_autofill" id="prevent_autofill" style={{ display: 'none' }} />

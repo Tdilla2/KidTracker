@@ -147,9 +147,9 @@ export function MealMenu() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <h1 className="text-white">Meal Menu</h1>
-        <p className="text-blue-50">Manage weekly meal plans and menus</p>
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <h1 className="text-white text-xl sm:text-3xl">Meal Menu</h1>
+        <p className="text-blue-50 text-xs sm:text-base">Manage weekly meal plans and menus</p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">

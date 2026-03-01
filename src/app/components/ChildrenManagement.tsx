@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Baby, Plus, Edit, Trash2, Search, UserCheck, UserX, Camera, X, User } from "lucide-react";
+import { Baby, Plus, Edit, Trash2, Search, UserCheck, UserX, Camera, X, User, AlertTriangle, ArrowUpCircle } from "lucide-react";
 import { format } from "date-fns";
 import { formatPhone, maskPhoneInput } from "../../lib/formatPhone";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -32,12 +32,25 @@ import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import type { Child, RecurringCharge } from "../context/DataContext";
 import { parseLocalDate, formatLocalDate } from "../../utils/dateUtils";
+import { getChildLimit } from "../../utils/trialUtils";
 import { toast } from "sonner";
 
-export function ChildrenManagement() {
+interface ChildrenManagementProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function ChildrenManagement({ onNavigate }: ChildrenManagementProps) {
   const { children, addChild, updateChild, deleteChild } = useData();
   const { users, updateUser, currentDaycare } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+
+  // Child limit based on subscription plan
+  const childLimit = currentDaycare?.subscriptionStatus === "trial"
+    ? Infinity // No limit during trial
+    : getChildLimit(currentDaycare?.subscriptionPlan);
+  const activeChildren = children.filter(c => c.status === "active").length;
+  const isAtLimit = activeChildren >= childLimit;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   
@@ -235,26 +248,65 @@ export function ChildrenManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <h1 className="text-white">Children Management</h1>
-        <p className="text-blue-50">Manage enrolled children and family information</p>
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <h1 className="text-white text-xl sm:text-3xl">Children Management</h1>
+        <p className="text-blue-50 text-xs sm:text-base">Manage enrolled children and family information</p>
       </div>
       
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 max-w-sm">
-          <Search className="h-4 w-4 text-muted-foreground" />
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <Input
             placeholder="Search children or parents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        {/* Upgrade prompt dialog */}
+        <Dialog open={showLimitDialog} onOpenChange={setShowLimitDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="h-5 w-5" />
+                Child Limit Reached
+              </DialogTitle>
+              <DialogDescription>
+                Your <span className="font-semibold capitalize">{currentDaycare?.subscriptionPlan}</span> plan allows up to <span className="font-semibold">{childLimit}</span> children.
+                You currently have <span className="font-semibold">{activeChildren}</span> active children enrolled.
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-sm text-gray-600">
+              Upgrade your plan to enroll more children and unlock additional features.
+            </p>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setShowLimitDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => { setShowLimitDialog(false); onNavigate?.("billing"); }}
+                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+              >
+                <ArrowUpCircle className="h-4 w-4 mr-2" />
+                Upgrade Plan
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-700 hover:bg-blue-800">
+            <Button
+              className="bg-blue-700 hover:bg-blue-800"
+              onClick={(e) => {
+                if (isAtLimit) {
+                  e.preventDefault();
+                  setShowLimitDialog(true);
+                }
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Child
             </Button>
@@ -695,36 +747,38 @@ export function ChildrenManagement() {
           return (
             <Card key={child.id}>
               <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4 flex-1">
+                <div className="flex items-start justify-between gap-2 sm:gap-4">
+                  <div className="flex items-start gap-2 sm:gap-4 flex-1 min-w-0">
                     {/* Child Photo */}
                     {child.photo ? (
                       <img
                         src={child.photo}
                         alt={`${child.firstName} ${child.lastName}`}
-                        className="w-16 h-16 rounded-full object-cover border-2 border-blue-200"
+                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-blue-200 shrink-0"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200">
-                        <User className="h-8 w-8 text-gray-400" />
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200 shrink-0">
+                        <User className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
                       </div>
                     )}
-                    
-                    <div>
-                      <CardTitle>{child.firstName} {child.lastName}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
+
+                    <div className="min-w-0">
+                      <CardTitle className="text-base sm:text-lg truncate">{child.firstName} {child.lastName}</CardTitle>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                         DOB: {formatLocalDate(child.dateOfBirth)}
                       </p>
                       {parentUser && (
-                        <Badge variant="outline" className="mt-2">
-                          Connected Parent Portal Access: {parentUser.fullName}
+                        <Badge variant="outline" className="mt-2 text-xs">
+                          <span className="hidden sm:inline">Connected Parent Portal Access: </span>
+                          <span className="sm:hidden">Parent: </span>
+                          {parentUser.fullName}
                         </Badge>
                       )}
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Badge variant={child.status === 'active' ? 'default' : 'secondary'}>
+
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                    <Badge variant={child.status === 'active' ? 'default' : 'secondary'} className="text-xs">
                       {child.status}
                     </Badge>
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(child)}>

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "../../lib/api";
-import { getTrialInfo, computeTrialEndDate, SubscriptionStatus } from "../../utils/trialUtils";
+import { getTrialInfo, computeTrialEndDate, SubscriptionStatus, SubscriptionPlan } from "../../utils/trialUtils";
 
 export interface User {
   id: string;
@@ -33,6 +33,9 @@ export interface Daycare {
   ownerUserId?: string;
   trialEndsAt?: string;
   subscriptionStatus?: SubscriptionStatus;
+  subscriptionPlan?: SubscriptionPlan;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 interface AuthContextType {
@@ -52,6 +55,7 @@ interface AuthContextType {
   deleteDaycare: (id: string) => Promise<void>;
   archiveDaycare: (id: string) => Promise<void>;
   setCurrentDaycare: (daycare: Daycare | null) => void;
+  refreshCurrentDaycare: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -93,6 +97,9 @@ const dbToDaycare = (row: any): Daycare => ({
   ownerUserId: row.owner_user_id,
   trialEndsAt: row.trial_ends_at ?? undefined,
   subscriptionStatus: row.subscription_status ?? undefined,
+  subscriptionPlan: row.subscription_plan ?? "none",
+  stripeCustomerId: row.stripe_customer_id ?? undefined,
+  stripeSubscriptionId: row.stripe_subscription_id ?? undefined,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -180,6 +187,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setCurrentDaycare = (daycare: Daycare | null) => {
     setCurrentDaycareState(daycare);
+  };
+
+  const refreshCurrentDaycare = async () => {
+    if (!currentDaycare) return;
+    try {
+      const { data } = await supabase.from("daycares").select("*");
+      if (data) {
+        const updated = data.find((dc: any) => dc.id === currentDaycare.id);
+        if (updated) {
+          const refreshed = dbToDaycare(updated);
+          setCurrentDaycareState(refreshed);
+          setDaycares(prev => prev.map(dc => dc.id === refreshed.id ? refreshed : dc));
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing daycare:", error);
+    }
   };
 
   const login = async (username: string, password: string, daycareCode?: string): Promise<{ success: boolean; daycareName?: string; trialExpired?: boolean }> => {
@@ -661,6 +685,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (updates.ownerUserId !== undefined) dbUpdates.owner_user_id = updates.ownerUserId;
       if (updates.trialEndsAt !== undefined) dbUpdates.trial_ends_at = updates.trialEndsAt;
       if (updates.subscriptionStatus !== undefined) dbUpdates.subscription_status = updates.subscriptionStatus;
+      if (updates.subscriptionPlan !== undefined) dbUpdates.subscription_plan = updates.subscriptionPlan;
+      if (updates.stripeCustomerId !== undefined) dbUpdates.stripe_customer_id = updates.stripeCustomerId;
+      if (updates.stripeSubscriptionId !== undefined) dbUpdates.stripe_subscription_id = updates.stripeSubscriptionId;
 
       const { error } = await supabase
         .from("daycares")
@@ -835,6 +862,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deleteDaycare,
       archiveDaycare,
       setCurrentDaycare,
+      refreshCurrentDaycare,
       isAuthenticated: !!currentUser,
       isAdmin: currentUser?.role === "admin" || currentUser?.role === "super_admin",
       isSuperAdmin: currentUser?.role === "super_admin",

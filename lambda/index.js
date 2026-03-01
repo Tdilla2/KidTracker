@@ -19,6 +19,16 @@ function httpsRequest(options, body = null) {
   });
 }
 
+// Stripe credentials — loaded from environment variables (set in Lambda configuration)
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_IDS = {
+  starter: process.env.STRIPE_PRICE_STARTER || '',
+  professional: process.env.STRIPE_PRICE_PROFESSIONAL || '',
+  enterprise: process.env.STRIPE_PRICE_ENTERPRISE || '',
+};
+const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY) : null;
+
 // QuickBooks credentials / constants
 const QBO_CLIENT_ID     = 'ABZFDP7PIjWts3kK0IqHbjO1QylLXuVPVhHzCt1p3ZmYzAlRB4';
 const QBO_REDIRECT_URI  = 'https://main.d2nbsjhv8lzch9.amplifyapp.com';
@@ -152,13 +162,19 @@ exports.handler = async (event) => {
   }
 
   const path_ = event.rawPath || event.path || '';
-  const body = event.body ? JSON.parse(event.body) : {};
 
   // Parse path: /prod/api/{table} or /prod/api/{table}/{id}
   const pathParts = path_.split('/').filter(p => p);
   const apiIndex = pathParts.indexOf('api');
   const table = pathParts[apiIndex + 1]; // table name after 'api'
   const id = pathParts[apiIndex + 2]; // id after table (if present)
+
+  // For Stripe webhooks, keep raw body for signature verification
+  const isStripeWebhook = (table === 'stripe' && id === 'webhook');
+  const rawBody = isStripeWebhook
+    ? (event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body)
+    : null;
+  const body = (!isStripeWebhook && event.body) ? JSON.parse(event.body) : {};
 
   console.log('Path:', path_, 'Table:', table, 'ID:', id);
 
@@ -538,6 +554,160 @@ exports.handler = async (event) => {
       return { statusCode: 404, headers, body: JSON.stringify({ error: `Unknown QB action: ${qboAction}` }) };
     }
     // ── End QuickBooks routes ─────────────────────────────────────────────────
+
+    // ── Stripe Subscription routes (/api/stripe/*) ──────────────────────────
+    if (table === 'stripe') {
+      const stripeAction = id; // create-checkout-session | webhook | subscription | create-portal-session
+
+      // ── POST /api/stripe/create-checkout-session ──────────────────────────
+      if (stripeAction === 'create-checkout-session' && method === 'POST') {
+        const { daycareId, plan, successUrl, cancelUrl } = body;
+
+        if (!daycareId || !plan || !STRIPE_PRICE_IDS[plan]) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing daycareId or invalid plan' }) };
+        }
+
+        // Look up the daycare
+        const dcResult = await db.query('SELECT * FROM daycares WHERE id = $1', [daycareId]);
+        const daycare = dcResult.rows[0];
+        if (!daycare) {
+          return { statusCode: 404, headers, body: JSON.stringify({ error: 'Daycare not found' }) };
+        }
+
+        // Create or reuse Stripe customer
+        let stripeCustomerId = daycare.stripe_customer_id;
+        if (!stripeCustomerId) {
+          const customer = await stripe.customers.create({
+            email: daycare.email || undefined,
+            name: daycare.name,
+            metadata: { daycareId },
+          });
+          stripeCustomerId = customer.id;
+          await db.query('UPDATE daycares SET stripe_customer_id = $1 WHERE id = $2', [stripeCustomerId, daycareId]);
+        }
+
+        // Create Checkout Session
+        const session = await stripe.checkout.sessions.create({
+          customer: stripeCustomerId,
+          mode: 'subscription',
+          line_items: [{ price: STRIPE_PRICE_IDS[plan], quantity: 1 }],
+          success_url: (successUrl || 'http://localhost:5173') + '?payment=success',
+          cancel_url: (cancelUrl || 'http://localhost:5173') + '?payment=cancelled',
+          metadata: { daycareId, plan },
+          subscription_data: { metadata: { daycareId, plan } },
+        });
+
+        return { statusCode: 200, headers, body: JSON.stringify({ sessionId: session.id, url: session.url }) };
+      }
+
+      // ── POST /api/stripe/webhook ──────────────────────────────────────────
+      if (stripeAction === 'webhook' && method === 'POST') {
+        const sig = event.headers?.['stripe-signature'] || event.headers?.['Stripe-Signature'];
+
+        let stripeEvent;
+        try {
+          stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+        } catch (err) {
+          console.error('Stripe webhook signature verification failed:', err.message);
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Webhook signature verification failed' }) };
+        }
+
+        switch (stripeEvent.type) {
+          case 'checkout.session.completed': {
+            const session = stripeEvent.data.object;
+            const daycareId = session.metadata?.daycareId;
+            const plan = session.metadata?.plan;
+            const subscriptionId = session.subscription;
+
+            if (daycareId && plan) {
+              await db.query(
+                `UPDATE daycares SET subscription_status = 'active', subscription_plan = $1, stripe_subscription_id = $2 WHERE id = $3`,
+                [plan, subscriptionId, daycareId]
+              );
+              console.log(`Activated subscription for daycare ${daycareId}: plan=${plan}`);
+            }
+            break;
+          }
+          case 'customer.subscription.updated': {
+            const sub = stripeEvent.data.object;
+            const daycareId = sub.metadata?.daycareId;
+            if (daycareId && (sub.status === 'canceled' || sub.status === 'past_due')) {
+              await db.query(
+                `UPDATE daycares SET subscription_status = 'expired' WHERE id = $1`,
+                [daycareId]
+              );
+              console.log(`Subscription expired for daycare ${daycareId}`);
+            }
+            break;
+          }
+          case 'customer.subscription.deleted': {
+            const sub = stripeEvent.data.object;
+            const daycareId = sub.metadata?.daycareId;
+            if (daycareId) {
+              await db.query(
+                `UPDATE daycares SET subscription_status = 'expired', subscription_plan = 'none' WHERE id = $1`,
+                [daycareId]
+              );
+              console.log(`Subscription deleted for daycare ${daycareId}`);
+            }
+            break;
+          }
+          default:
+            console.log(`Unhandled Stripe event type: ${stripeEvent.type}`);
+        }
+
+        return { statusCode: 200, headers, body: JSON.stringify({ received: true }) };
+      }
+
+      // ── GET /api/stripe/subscription?daycare_id=XXX ───────────────────────
+      if (stripeAction === 'subscription' && method === 'GET') {
+        const queryParams = event.queryStringParameters || {};
+        const daycareId = queryParams.daycare_id;
+        if (!daycareId) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing daycare_id' }) };
+        }
+
+        const result = await db.query(
+          'SELECT subscription_plan, subscription_status, stripe_customer_id, stripe_subscription_id FROM daycares WHERE id = $1',
+          [daycareId]
+        );
+        const row = result.rows[0];
+        if (!row) {
+          return { statusCode: 404, headers, body: JSON.stringify({ error: 'Daycare not found' }) };
+        }
+
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({
+            plan: row.subscription_plan,
+            status: row.subscription_status,
+            stripeCustomerId: row.stripe_customer_id,
+            stripeSubscriptionId: row.stripe_subscription_id,
+          }),
+        };
+      }
+
+      // ── POST /api/stripe/create-portal-session ────────────────────────────
+      if (stripeAction === 'create-portal-session' && method === 'POST') {
+        const { daycareId, returnUrl } = body;
+
+        const dcResult = await db.query('SELECT stripe_customer_id FROM daycares WHERE id = $1', [daycareId]);
+        const daycare = dcResult.rows[0];
+        if (!daycare?.stripe_customer_id) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'No Stripe customer found for this daycare' }) };
+        }
+
+        const session = await stripe.billingPortal.sessions.create({
+          customer: daycare.stripe_customer_id,
+          return_url: returnUrl || 'http://localhost:5173',
+        });
+
+        return { statusCode: 200, headers, body: JSON.stringify({ url: session.url }) };
+      }
+
+      return { statusCode: 404, headers, body: JSON.stringify({ error: `Unknown Stripe action: ${stripeAction}` }) };
+    }
+    // ── End Stripe routes ───────────────────────────────────────────────────
 
     const encKey = table === 'children' ? await getEncryptionKey() : null;
     let result;

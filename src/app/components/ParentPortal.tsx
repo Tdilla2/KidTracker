@@ -144,8 +144,8 @@ export function ParentPortal() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="mb-1">Parent Portal</h1>
-        <p className="text-muted-foreground">
+        <h1 className="mb-1 text-xl sm:text-3xl">Parent Portal</h1>
+        <p className="text-muted-foreground text-xs sm:text-base">
           Welcome, {currentUser?.fullName}! View your child's information below.
         </p>
       </div>
@@ -165,12 +165,12 @@ export function ParentPortal() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between gap-4 p-4 bg-white rounded-lg border-2 border-purple-300">
-              <div className="flex items-center gap-3">
-                <Key className="h-6 w-6 text-purple-600" />
+            <div className="flex items-center justify-between gap-2 sm:gap-4 p-3 sm:p-4 bg-white rounded-lg border-2 border-purple-300">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Key className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Your Access Code</p>
-                  <p className="text-3xl font-bold font-mono text-purple-900 tracking-wider">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono text-purple-900 tracking-wider">
                     {currentUser.parentCode}
                   </p>
                 </div>

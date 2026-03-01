@@ -23,7 +23,7 @@ import {
 } from "./ui/select";
 import { useAuth, Daycare } from "../context/AuthContext";
 import { toast } from "sonner";
-import { getTrialInfo, computeTrialEndDate } from "../../utils/trialUtils";
+import { getTrialInfo, computeTrialEndDate, SubscriptionPlan } from "../../utils/trialUtils";
 
 export function SuperAdminDashboard() {
   const { daycares, users, addDaycare, updateDaycare, deleteDaycare, archiveDaycare, currentUser, updateUser } = useAuth();
@@ -204,12 +204,13 @@ export function SuperAdminDashboard() {
     }
   };
 
-  const handleActivateSubscription = async (daycare: Daycare) => {
+  const handleActivateSubscription = async (daycare: Daycare, plan: SubscriptionPlan = "enterprise") => {
     try {
       await updateDaycare(daycare.id, {
         subscriptionStatus: "active",
+        subscriptionPlan: plan,
       });
-      toast.success(`Subscription activated for ${daycare.name}`);
+      toast.success(`Subscription activated for ${daycare.name} (${plan})`);
     } catch {
       toast.error("Failed to activate subscription");
     }
@@ -304,21 +305,22 @@ export function SuperAdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="h-14 object-contain bg-white rounded-lg p-1" />
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <img src={kidtrackerLogo} alt="KidTrackerApp Logo" className="h-10 sm:h-14 object-contain bg-white rounded-lg p-1 shrink-0" />
             <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Super Admin Dashboard</h1>
-              <p className="text-blue-50">Manage all daycares in the KidTrackerApp™ system</p>
+              <h1 className="text-lg sm:text-2xl font-bold text-white mb-1">Super Admin Dashboard</h1>
+              <p className="text-blue-50 text-xs sm:text-base">Manage all daycares in the KidTrackerApp™ system</p>
             </div>
           </div>
           <Button
-            className="bg-blue-800 text-white hover:bg-blue-900"
+            size="sm"
+            className="bg-blue-800 text-white hover:bg-blue-900 shrink-0"
             onClick={handleOpenSettings}
           >
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
+            <Settings className="mr-1 sm:mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Settings</span>
           </Button>
         </div>
       </div>
@@ -643,7 +645,14 @@ export function SuperAdminDashboard() {
                           : "Location not set"}
                       </CardDescription>
                     </div>
-                    {trialBadge}
+                    <div className="flex flex-col items-end gap-1">
+                      {trialBadge}
+                      {daycare.subscriptionPlan && daycare.subscriptionPlan !== "none" && (
+                        <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 bg-purple-50">
+                          {daycare.subscriptionPlan.charAt(0).toUpperCase() + daycare.subscriptionPlan.slice(1)}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -676,24 +685,41 @@ export function SuperAdminDashboard() {
 
                   {/* Trial Actions */}
                   {!trialInfo.isPermanentlyActive && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => handleExtendTrial(daycare)}
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                        Extend Trial
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1 text-xs bg-green-600 hover:bg-green-700"
-                        onClick={() => handleActivateSubscription(daycare)}
-                      >
-                        <Zap className="h-3 w-3 mr-1" />
-                        Activate
-                      </Button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => handleExtendTrial(daycare)}
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Extend Trial
+                        </Button>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          className="flex-1 text-xs bg-blue-600 hover:bg-blue-700"
+                          onClick={() => handleActivateSubscription(daycare, "starter")}
+                        >
+                          Starter
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 text-xs bg-purple-600 hover:bg-purple-700"
+                          onClick={() => handleActivateSubscription(daycare, "professional")}
+                        >
+                          Pro
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 text-xs bg-amber-600 hover:bg-amber-700"
+                          onClick={() => handleActivateSubscription(daycare, "enterprise")}
+                        >
+                          Enterprise
+                        </Button>
+                      </div>
                     </div>
                   )}
 

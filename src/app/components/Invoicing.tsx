@@ -434,9 +434,9 @@ export function Invoicing() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-        <h1 className="text-white">Invoicing</h1>
-        <p className="text-blue-50">Create and manage invoices</p>
+      <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-lg p-4 sm:p-6 shadow-lg">
+        <h1 className="text-white text-xl sm:text-3xl">Invoicing</h1>
+        <p className="text-blue-50 text-xs sm:text-base">Create and manage invoices</p>
       </div>
 
       <div className="flex items-center justify-between">

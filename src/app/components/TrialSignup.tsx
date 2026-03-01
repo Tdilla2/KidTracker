@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Users, Building2, User, Mail, Phone, MapPin, ArrowLeft, Copy, Check, PartyPopper, CreditCard } from "lucide-react";
+import kidtrackerLogo from "../assets/kidtracker-logo.jpg";
 import { maskPhoneInput } from "../../lib/formatPhone";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -158,9 +159,7 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
           {/* Logo and Branding */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="flex items-center justify-center mb-3 sm:mb-4">
-              <div className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
-                <PartyPopper className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
-              </div>
+              <img src={kidtrackerLogo} alt="KidTrackerApp" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-lg object-cover" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
             <p className="text-sm sm:text-base text-blue-700">Powered by GDI Digital Solutions</p>
@@ -265,9 +264,7 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
         {/* Logo and Branding */}
         <div className="text-center mb-6 sm:mb-8">
           <div className="flex items-center justify-center mb-3 sm:mb-4">
-            <div className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-r from-blue-700 to-blue-600 rounded-2xl shadow-lg">
-              <Users className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
-            </div>
+            <img src={kidtrackerLogo} alt="KidTrackerApp" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-lg object-cover" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">KidTrackerApp™</h1>
           <p className="text-sm sm:text-base text-blue-700">Powered by GDI Digital Solutions</p>

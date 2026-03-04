@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon, Archive, ArchiveRestore } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon, Archive, ArchiveRestore, Shield, Mail, Eye, EyeOff } from "lucide-react";
 import kidtrackerLogo from "../assets/kidtracker-logo.jpg";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -26,18 +26,86 @@ import { toast } from "sonner";
 import { getTrialInfo, computeTrialEndDate, SubscriptionPlan } from "../../utils/trialUtils";
 
 export function SuperAdminDashboard() {
-  const { daycares, users, addDaycare, updateDaycare, deleteDaycare, archiveDaycare, currentUser, updateUser } = useAuth();
+  const { daycares, users, addDaycare, updateDaycare, deleteDaycare, archiveDaycare, currentUser, updateUser, addUser, deleteUser } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDaycare, setEditingDaycare] = useState<Daycare | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAddSuperAdminOpen, setIsAddSuperAdminOpen] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [superAdminForm, setSuperAdminForm] = useState({
+    username: "",
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [settingsForm, setSettingsForm] = useState({
     username: "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
+
+  // Get all super admin users
+  const superAdmins = users.filter(u => u.role === "super_admin");
+
+  const resetSuperAdminForm = () => {
+    setSuperAdminForm({ username: "", fullName: "", email: "", password: "", confirmPassword: "" });
+    setShowNewPassword(false);
+  };
+
+  const handleAddSuperAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!superAdminForm.username || !superAdminForm.fullName || !superAdminForm.email || !superAdminForm.password) {
+      toast.error("All fields are required");
+      return;
+    }
+    if (superAdminForm.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (superAdminForm.password !== superAdminForm.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    try {
+      await addUser({
+        username: superAdminForm.username,
+        fullName: superAdminForm.fullName,
+        email: superAdminForm.email,
+        password: superAdminForm.password,
+        role: "super_admin",
+        status: "active",
+        childIds: [],
+        mustChangePassword: false,
+      });
+      toast.success(`Super admin "${superAdminForm.username}" created successfully`);
+      resetSuperAdminForm();
+      setIsAddSuperAdminOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create super admin");
+    }
+  };
+
+  const handleDeleteSuperAdmin = async (user: { id: string; username: string }) => {
+    if (user.id === currentUser?.id) {
+      toast.error("You cannot delete your own account");
+      return;
+    }
+    if (superAdmins.length <= 1) {
+      toast.error("Cannot delete the last super admin");
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete super admin "${user.username}"?`)) return;
+    try {
+      await deleteUser(user.id);
+      toast.success(`Super admin "${user.username}" deleted`);
+    } catch {
+      toast.error("Failed to delete super admin");
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -779,6 +847,166 @@ export function SuperAdminDashboard() {
           })
         )}
       </div>
+
+      {/* Super Admins Section */}
+      <Card className="border-purple-200">
+        <CardHeader className="bg-purple-50 border-b border-purple-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-purple-900 flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Super Admins
+              </CardTitle>
+              <CardDescription>Manage super admin accounts with full system access</CardDescription>
+            </div>
+            <Dialog open={isAddSuperAdminOpen} onOpenChange={(open) => {
+              setIsAddSuperAdminOpen(open);
+              if (!open) resetSuperAdminForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="bg-purple-700 hover:bg-purple-800">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Super Admin
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add Super Admin</DialogTitle>
+                  <DialogDescription>
+                    Create a new super admin account with full system access to all daycares.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddSuperAdmin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sa-username">Username *</Label>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="sa-username"
+                        value={superAdminForm.username}
+                        onChange={(e) => setSuperAdminForm({ ...superAdminForm, username: e.target.value })}
+                        className="pl-10"
+                        placeholder="Enter username"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sa-fullName">Full Name *</Label>
+                    <Input
+                      id="sa-fullName"
+                      value={superAdminForm.fullName}
+                      onChange={(e) => setSuperAdminForm({ ...superAdminForm, fullName: e.target.value })}
+                      placeholder="Enter full name"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sa-email">Email *</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="sa-email"
+                        type="email"
+                        value={superAdminForm.email}
+                        onChange={(e) => setSuperAdminForm({ ...superAdminForm, email: e.target.value })}
+                        className="pl-10"
+                        placeholder="Enter email"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sa-password">Password *</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="sa-password"
+                        type={showNewPassword ? "text" : "password"}
+                        value={superAdminForm.password}
+                        onChange={(e) => setSuperAdminForm({ ...superAdminForm, password: e.target.value })}
+                        className="pl-10 pr-10"
+                        placeholder="Min 8 characters"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sa-confirmPassword">Confirm Password *</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="sa-confirmPassword"
+                        type="password"
+                        value={superAdminForm.confirmPassword}
+                        onChange={(e) => setSuperAdminForm({ ...superAdminForm, confirmPassword: e.target.value })}
+                        className="pl-10"
+                        placeholder="Confirm password"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsAddSuperAdminOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-purple-700 hover:bg-purple-800">
+                      Create Super Admin
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="space-y-3">
+            {superAdmins.map((admin) => (
+              <div key={admin.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-purple-100 rounded-full flex items-center justify-center">
+                    <Shield className="h-4 w-4 text-purple-700" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{admin.fullName}</p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="font-mono">{admin.username}</span>
+                      <span>-</span>
+                      <span>{admin.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {admin.id === currentUser?.id && (
+                    <Badge variant="outline" className="border-purple-300 text-purple-700">You</Badge>
+                  )}
+                  <Badge variant="outline" className="border-green-300 text-green-700">{admin.status}</Badge>
+                  {admin.id !== currentUser?.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteSuperAdmin(admin)}
+                      title="Delete super admin"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {superAdmins.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No super admins found</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>

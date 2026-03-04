@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   password TEXT NOT NULL,
   full_name TEXT NOT NULL,
   email TEXT NOT NULL,
-  role TEXT DEFAULT 'user' CHECK (role IN ('admin', 'user', 'parent')),
+  role TEXT DEFAULT 'user' CHECK (role IN ('super_admin', 'admin', 'user', 'parent', 'staff')),
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
   child_ids JSONB DEFAULT '[]',
   parent_code TEXT,

@@ -1,11 +1,21 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "../../lib/api";
+import { supabase, API_BASE, API_KEY } from "../../lib/api";
 import { getTrialInfo, computeTrialEndDate, SubscriptionStatus, SubscriptionPlan } from "../../utils/trialUtils";
+
+// Helper for authenticated Lambda API calls
+async function apiPost(path: string, body: Record<string, unknown>) {
+  const res = await fetch(`${API_BASE}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+    body: JSON.stringify(body),
+  });
+  return res;
+}
 
 export interface User {
   id: string;
   username: string;
-  password: string;
+  password?: string;
   role: "super_admin" | "admin" | "user" | "parent";
   fullName: string;
   email: string;
@@ -50,7 +60,7 @@ interface AuthContextType {
   addUser: (user: Omit<User, "id" | "createdAt">) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
-  addDaycare: (daycare: Omit<Daycare, "id" | "createdAt">) => Promise<Daycare>;
+  addDaycare: (daycare: Omit<Daycare, "id" | "createdAt">) => Promise<Daycare & { adminPassword?: string }>;
   updateDaycare: (id: string, daycare: Partial<Daycare>) => Promise<void>;
   deleteDaycare: (id: string) => Promise<void>;
   archiveDaycare: (id: string) => Promise<void>;
@@ -69,17 +79,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const dbToUser = (row: any): User => ({
   id: row.id,
   username: row.username,
-  password: row.password,
+  // password intentionally omitted — never stored client-side
   role: row.role,
-  fullName: row.full_name,
+  fullName: row.full_name || row.fullName,
   email: row.email,
-  createdAt: row.created_at,
-  lastLogin: row.last_login,
+  createdAt: row.created_at || row.createdAt,
+  lastLogin: row.last_login || row.lastLogin,
   status: row.status,
-  childIds: row.child_ids || [],
-  parentCode: row.parent_code,
-  daycareId: row.daycare_id,
-  mustChangePassword: row.must_change_password ?? false,
+  childIds: row.child_ids || row.childIds || [],
+  parentCode: row.parent_code || row.parentCode,
+  daycareId: row.daycare_id || row.daycareId,
+  mustChangePassword: row.must_change_password ?? row.mustChangePassword ?? false,
 });
 
 const dbToDaycare = (row: any): Daycare => ({
@@ -118,13 +128,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [logoutCount, setLogoutCount] = useState(0);
 
-  // Fetch users from Supabase
+  // Fetch users — scoped by daycare_id (server-side) unless super_admin
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from("app_users")
-        .select("*")
-        .order("full_name");
+      let query = supabase.from("app_users").select("*").order("full_name");
+      // Non-super-admins only see users from their own daycare
+      const userDaycareId = currentUser?.daycareId;
+      if (currentUser && currentUser.role !== "super_admin" && userDaycareId) {
+        query = supabase.from("app_users").select("*").eq("daycare_id", userDaycareId).order("full_name");
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching users:", error);
@@ -208,130 +222,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string, daycareCode?: string): Promise<{ success: boolean; daycareName?: string; trialExpired?: boolean }> => {
     try {
-      // Trim whitespace from inputs
-      const trimmedUsername = username.trim().toLowerCase();
-      const trimmedPassword = password.trim();
+      const res = await apiPost('auth/login', { username, password, daycareCode });
+      const data = await res.json();
 
-      console.log("LOGIN: Attempting login with username:", trimmedUsername, "daycareCode:", daycareCode);
+      if (res.status === 403 && data.trialExpired) {
+        return { success: false, trialExpired: true, daycareName: data.daycareName };
+      }
 
-      // Fetch all users first
-      const { data: allUsers, error: usersError } = await supabase
-        .from("app_users")
-        .select("*");
-
-      console.log("LOGIN: Fetched users:", { count: allUsers?.length, error: usersError });
-
-      if (usersError || !allUsers || allUsers.length === 0) {
-        console.log("Login failed - no users found or error:", usersError);
+      if (!res.ok || !data.success) {
         return { success: false };
       }
 
-      // Check for super admin first (no daycare code needed)
-      const superAdminUser = allUsers.find(
-        (u: any) =>
-          u.password === trimmedPassword &&
-          u.status === "active" &&
-          u.role === "super_admin" &&
-          (u.username?.toLowerCase() === trimmedUsername || u.email?.toLowerCase() === trimmedUsername)
-      );
+      const user = dbToUser(data.user);
+      const daycare = data.daycare ? dbToDaycare(data.daycare) : null;
 
-      if (superAdminUser) {
-        console.log("LOGIN: Found super admin user:", superAdminUser.username);
-        const user = dbToUser(superAdminUser);
-        const updatedUser = {
-          ...user,
-          lastLogin: new Date().toISOString()
-        };
-
-        await supabase
-          .from("app_users")
-          .update({ last_login: updatedUser.lastLogin })
-          .eq("id", user.id);
-
-        setCurrentUser(updatedUser);
-        setCurrentDaycareState(null);
-        setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
-        return { success: true };
-      }
-
-      // For non-super-admin users, daycare code is required
-      if (!daycareCode) {
-        console.log("Login failed - daycare code required for non-super-admin users");
-        return { success: false };
-      }
-
-      // Look up the daycare by code FIRST
-      const { data: allDaycares, error: daycareError } = await supabase
-        .from("daycares")
-        .select("*");
-
-      console.log("LOGIN: Fetched daycares:", { count: allDaycares?.length, error: daycareError });
-
-      if (daycareError || !allDaycares || allDaycares.length === 0) {
-        console.log("Login failed - could not fetch daycares");
-        return { success: false };
-      }
-
-      // Find the target daycare by code
-      const targetCode = daycareCode.trim().toUpperCase();
-      const daycareData = allDaycares.find(
-        (dc: any) => dc.daycare_code === targetCode && dc.status === "active"
-      );
-
-      if (!daycareData) {
-        console.log("Login failed - invalid daycare code:", targetCode);
-        console.log("LOGIN: Available daycare codes:", allDaycares.map((dc: any) => dc.daycare_code));
-        return { success: false };
-      }
-
-      const daycare = dbToDaycare(daycareData);
-      console.log("LOGIN: Found daycare:", daycare.name, "ID:", daycare.id);
-
-      // Check trial status before allowing login
-      const trialInfo = getTrialInfo(daycare);
-      if (!trialInfo.isAccessAllowed) {
-        console.log("LOGIN: Trial expired for daycare:", daycare.name);
-        return { success: false, trialExpired: true, daycareName: daycare.name };
-      }
-
-      // Now find a user in THIS SPECIFIC DAYCARE matching the credentials
-      const matchingUser = allUsers.find(
-        (u: any) =>
-          u.password === trimmedPassword &&
-          u.status === "active" &&
-          (u.daycare_id === daycare.id || !u.daycare_id) && // User must belong to this daycare or have no daycare assigned
-          (u.username?.toLowerCase() === trimmedUsername || u.email?.toLowerCase() === trimmedUsername)
-      );
-
-      if (!matchingUser) {
-        console.log("Login failed - no user found in daycare", daycare.name, "with username:", trimmedUsername);
-        // Debug: show users in this daycare
-        const daycareUsers = allUsers.filter((u: any) => u.daycare_id === daycare.id);
-        console.log("LOGIN: Users in this daycare:", daycareUsers.map((u: any) => u.username));
-        return { success: false };
-      }
-
-      console.log("LOGIN: Found matching user:", matchingUser.username, "in daycare:", daycare.name);
-
-      const user = dbToUser(matchingUser);
-      const updatedUser = {
-        ...user,
-        lastLogin: new Date().toISOString(),
-        daycareId: daycare.id
-      };
-
-      // Update last login and daycare_id in database
-      await supabase
-        .from("app_users")
-        .update({ last_login: updatedUser.lastLogin, daycare_id: daycare.id })
-        .eq("id", user.id);
-
-      console.log("LOGIN: Setting currentDaycare to:", daycare.name);
-      setCurrentUser(updatedUser);
+      setCurrentUser(user);
       setCurrentDaycareState(daycare);
-      setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+      setUsers(prev => {
+        const exists = prev.some(u => u.id === user.id);
+        return exists ? prev.map(u => u.id === user.id ? user : u) : [...prev, user];
+      });
 
-      return { success: true, daycareName: daycare.name };
+      return { success: true, daycareName: daycare?.name };
     } catch (error) {
       console.error("Login error:", error);
       return { success: false };
@@ -340,58 +252,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithParentCode = async (code: string): Promise<boolean> => {
     try {
-      // Fetch all users and filter client-side since API doesn't support filtering
-      const { data: allUsers, error } = await supabase
-        .from("app_users")
-        .select("*");
+      const res = await apiPost('auth/login-parent', { parentCode: code });
+      const data = await res.json();
 
-      if (error || !allUsers || allUsers.length === 0) {
+      if (!res.ok || !data.success) {
         return false;
       }
 
-      // Filter client-side by parent_code, status, and role
-      const matchingUser = allUsers.find(
-        (u: any) =>
-          u.parent_code === code &&
-          u.status === "active" &&
-          u.role === "parent"
-      );
+      const user = dbToUser(data.user);
+      const daycare = data.daycare ? dbToDaycare(data.daycare) : null;
 
-      if (!matchingUser) {
-        return false;
-      }
-
-      const user = dbToUser(matchingUser);
-      const updatedUser = {
-        ...user,
-        lastLogin: new Date().toISOString()
-      };
-
-      // Update last login in database
-      await supabase
-        .from("app_users")
-        .update({ last_login: updatedUser.lastLogin })
-        .eq("id", user.id);
-
-      // Set the current daycare based on user's daycareId
-      if (user.daycareId) {
-        const { data: allDaycares } = await supabase.from("daycares").select("*");
-        if (allDaycares) {
-          const userDaycare = allDaycares.find((dc: any) => dc.id === user.daycareId);
-          if (userDaycare) {
-            const daycare = dbToDaycare(userDaycare);
-            // Check trial status before allowing parent login
-            const trialInfo = getTrialInfo(daycare);
-            if (!trialInfo.isAccessAllowed) {
-              return false;
-            }
-            setCurrentDaycareState(daycare);
-          }
-        }
-      }
-
-      setCurrentUser(updatedUser);
-      setUsers(prev => prev.map(u => u.id === user.id ? updatedUser : u));
+      setCurrentUser(user);
+      if (daycare) setCurrentDaycareState(daycare);
+      setUsers(prev => {
+        const exists = prev.some(u => u.id === user.id);
+        return exists ? prev.map(u => u.id === user.id ? user : u) : [...prev, user];
+      });
 
       return true;
     } catch (error) {
@@ -402,63 +278,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (daycareCode: string, username: string, email: string): Promise<{ success: boolean; tempPassword?: string }> => {
     try {
-      const trimmedUsername = username.trim().toLowerCase();
-      const trimmedEmail = email.trim().toLowerCase();
-      const trimmedCode = daycareCode.trim().toUpperCase();
+      const res = await apiPost('auth/reset-password', { daycareCode, username, email });
+      const data = await res.json();
 
-      // Fetch all users and daycares
-      const [{ data: allUsers }, { data: allDaycares }] = await Promise.all([
-        supabase.from("app_users").select("*"),
-        supabase.from("daycares").select("*"),
-      ]);
-
-      if (!allUsers || !allDaycares) return { success: false };
-
-      // Find the daycare by code
-      const daycareData = allDaycares.find(
-        (dc: any) => dc.daycare_code === trimmedCode && dc.status === "active"
-      );
-      if (!daycareData) return { success: false };
-
-      // Find a matching active user in that daycare
-      const matchingUser = allUsers.find(
-        (u: any) =>
-          u.daycare_id === daycareData.id &&
-          u.status === "active" &&
-          u.username?.toLowerCase() === trimmedUsername &&
-          u.email?.toLowerCase() === trimmedEmail
-      );
-
-      if (!matchingUser) return { success: false };
-
-      // Generate an 8-character random temporary password
-      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
-      let tempPassword = "";
-      for (let i = 0; i < 8; i++) {
-        tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-
-      // Update the user's password and set must_change_password = true
-      const { error } = await supabase
-        .from("app_users")
-        .update({ password: tempPassword, must_change_password: true })
-        .eq("id", matchingUser.id);
-
-      if (error) {
-        console.error("Error resetting password:", error);
+      if (!res.ok || !data.success) {
         return { success: false };
       }
 
-      // Update local state
-      setUsers(prev =>
-        prev.map(u =>
-          u.id === matchingUser.id
-            ? { ...u, password: tempPassword, mustChangePassword: true }
-            : u
-        )
-      );
-
-      return { success: true, tempPassword };
+      return { success: true, tempPassword: data.tempPassword };
     } catch (error) {
       console.error("Reset password error:", error);
       return { success: false };
@@ -568,17 +395,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Generate a unique 6-character daycare code
+  // Generate a unique 6-character daycare code using crypto
   const generateDaycareCode = (): string => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Excluding similar chars like 0/O, 1/I
+    const randomBytes = crypto.getRandomValues(new Uint8Array(6));
     let code = "";
     for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      code += chars.charAt(randomBytes[i] % chars.length);
     }
     return code;
   };
 
-  const addDaycare = async (daycare: Omit<Daycare, "id" | "createdAt">): Promise<Daycare> => {
+  const addDaycare = async (daycare: Omit<Daycare, "id" | "createdAt">): Promise<Daycare & { adminPassword?: string }> => {
     try {
       // Generate a unique code if not provided
       const daycareCode = daycare.daycareCode || generateDaycareCode();
@@ -635,7 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (newUserData) {
           // Add the newly created user to the local state
           setUsers(prev => [...prev, dbToUser(newUserData)]);
-          console.log(`Created default admin user for ${daycare.name}: username=${defaultUsername}, password=Password123!`);
+          console.log(`Created default admin user for ${daycare.name}: username=${defaultUsername}`);
         }
 
         // Create company_info record with daycare information
@@ -660,7 +488,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setDaycares(prev => [...prev, newDaycare]);
-        return newDaycare;
+        return { ...newDaycare, adminPassword: defaultPassword };
       }
 
       throw new Error("No data returned from insert");

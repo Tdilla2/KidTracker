@@ -119,8 +119,8 @@ export function SuperAdminDashboard() {
           ownerUserId: currentUser?.id,
         });
         toast.success(
-          `Daycare created! Default login: Code: ${newDaycare.daycareCode}, Username: admin_${newDaycare.daycareCode.toLowerCase()}, Password: Password123!`,
-          { duration: 10000 }
+          `Daycare created! Default login: Code: ${newDaycare.daycareCode}, Username: admin_${newDaycare.daycareCode.toLowerCase()}, Password: ${newDaycare.adminPassword || '(check logs)'}`,
+          { duration: 15000 }
         );
       }
 

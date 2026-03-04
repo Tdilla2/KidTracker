@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Calendar, DollarSign, FileText, BarChart3, UtensilsCrossed, Link, Settings, LogOut, Building2, ClipboardList, School, ArrowLeft, Shield, AlertTriangle, CreditCard, Menu, X } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { LayoutDashboard, Users, Calendar, DollarSign, FileText, BarChart3, UtensilsCrossed, Link, Settings, LogOut, Building2, ClipboardList, School, ArrowLeft, Shield, AlertTriangle, CreditCard, Menu, X, Clock } from "lucide-react";
 import defaultLogo from "./assets/kidtracker-logo.jpg";
 import { Button } from "./components/ui/button";
 import { Dashboard } from "./components/Dashboard";
@@ -25,14 +25,28 @@ import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Toaster } from "./components/ui/sonner";
 import { Badge } from "./components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./components/ui/dialog";
 import { toast } from "sonner";
 import { getTrialInfo, hasFeatureAccess } from "../utils/trialUtils";
+import { useIdleTimeout } from "./hooks/useIdleTimeout";
 
 type Page = "dashboard" | "children" | "attendance" | "activities" | "classrooms" | "financials" | "invoicing" | "reports" | "mealmenu" | "quickbooks" | "users" | "parent" | "company" | "billing";
 
 function AppContent() {
   const { isAuthenticated, isAdmin, isSuperAdmin, currentUser, currentDaycare, setCurrentDaycare, refreshCurrentDaycare, logout, logoutCount } = useAuth();
   const { companyInfo, refreshData: refreshAllData } = useData();
+
+  // Inactivity timeout — auto-logout after 10 minutes of no activity
+  const handleIdleTimeout = useCallback(() => {
+    logout();
+    toast.info("You've been logged out due to inactivity.");
+  }, [logout]);
+
+  const { showWarning: showIdleWarning, remainingSeconds, dismiss: dismissIdleWarning } = useIdleTimeout({
+    onTimeout: handleIdleTimeout,
+    enabled: isAuthenticated,
+  });
+
   const [showTrialSignup, setShowTrialSignup] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -68,11 +82,17 @@ function AppContent() {
       return;
     }
 
-    // Fallback: main window redirect flow (stays logged in via localStorage)
+    // Fallback: main window redirect flow or popup with lost opener (Safari)
+    // Store callback data in localStorage for QuickBooksIntegration to pick up
     if (!isAuthenticated) return;
     localStorage.setItem('qbo_pending_callback', JSON.stringify({ code, realmId, daycareId: state, redirectUri: window.location.origin }));
     window.history.replaceState({}, '', window.location.pathname);
     setCurrentPage('quickbooks');
+
+    // If this was a popup that lost its opener reference, try to close it
+    if (window.opener === null && window.name === 'qbo_auth') {
+      window.close();
+    }
   }, [isAuthenticated]);
 
   // Detect Stripe Checkout redirect (?payment=success or ?payment=cancelled)
@@ -108,6 +128,39 @@ function AppContent() {
       toast.info("Payment was cancelled. You can pay anytime from the Billing & Payments tab.");
     }
   }, [isAuthenticated]);
+
+  // Idle timeout warning dialog (shared across all authenticated views)
+  const idleWarningDialog = (
+    <Dialog open={showIdleWarning} onOpenChange={(open) => { if (!open) dismissIdleWarning(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-yellow-700">
+            <Clock className="h-5 w-5" />
+            Session Timeout Warning
+          </DialogTitle>
+          <DialogDescription className="text-base pt-2">
+            You've been inactive. Your session will expire in{" "}
+            <span className="font-bold text-red-600">{remainingSeconds}</span> second{remainingSeconds !== 1 ? "s" : ""}.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => { logout(); }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Log Out Now
+          </Button>
+          <Button
+            className="bg-blue-700 hover:bg-blue-800"
+            onClick={dismissIdleWarning}
+          >
+            Stay Logged In
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Show login or trial signup or forgot password screen if not authenticated
   if (!isAuthenticated) {
@@ -194,6 +247,7 @@ function AppContent() {
             </div>
           </main>
         </div>
+        {idleWarningDialog}
         <Toaster />
       </>
     );
@@ -251,6 +305,7 @@ function AppContent() {
             </div>
           </main>
         </div>
+        {idleWarningDialog}
         <Toaster />
       </>
     );
@@ -490,6 +545,7 @@ function AppContent() {
           </main>
         </div>
       </div>
+      {idleWarningDialog}
       <Toaster />
     </>
   );

@@ -1,5 +1,6 @@
 // AWS API Gateway client for KidTrackerApp
-const API_BASE = 'https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api';
+export const API_BASE = 'https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api';
+export const API_KEY = 'kt_live_f8a3d7e1b9c4f6a2e5d8b3c7f1a9d4e6';
 
 interface QueryBuilder {
   select: (columns?: string) => QueryBuilder;
@@ -85,10 +86,21 @@ class ApiClient {
         url += `/${this.filters.id}`;
       }
 
+      // Pass non-id filters as query parameters (e.g., daycare_id scoping)
+      const queryFilters = Object.entries(this.filters).filter(([k]) => k !== 'id');
+      if (queryFilters.length > 0) {
+        const params = new URLSearchParams();
+        for (const [key, value] of queryFilters) {
+          params.set(key, String(value));
+        }
+        url += (url.includes('?') ? '&' : '?') + params.toString();
+      }
+
       const options: RequestInit = {
         method: this.method,
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
       };
 

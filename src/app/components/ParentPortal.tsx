@@ -17,8 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-
-const API_BASE = "https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api";
+import { API_BASE, API_KEY } from "../../lib/api";
 
 export function ParentPortal() {
   const { currentUser, currentDaycare } = useAuth();
@@ -129,7 +128,7 @@ export function ParentPortal() {
     try {
       const res = await fetch(`${API_BASE}/stripe/create-invoice-payment`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
         body: JSON.stringify({
           invoiceId,
           daycareId: currentDaycare?.id || currentUser?.daycareId,

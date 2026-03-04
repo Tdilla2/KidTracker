@@ -82,7 +82,7 @@ export function TrialSignup({ onBackToLogin }: TrialSignupProps) {
         daycareId: newDaycare.id,
         daycareCode: code,
         adminUsername: `admin_${code.toLowerCase()}`,
-        adminPassword: "Password123!",
+        adminPassword: newDaycare.adminPassword || "Password123!",
         daycareName: newDaycare.name,
       };
       setSignupResult(result);

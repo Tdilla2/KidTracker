@@ -4,8 +4,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
-
-const API_BASE = "https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api";
+import { API_BASE, API_KEY } from "../../lib/api";
 
 interface PricingPageProps {
   daycareId: string;
@@ -85,7 +84,7 @@ export function PricingPage({ daycareId, daycareName, onSkip, onClose, isPostSig
     try {
       const res = await fetch(`${API_BASE}/stripe/create-checkout-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
         body: JSON.stringify({
           daycareId,
           plan,

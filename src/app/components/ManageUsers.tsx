@@ -53,7 +53,7 @@ export function ManageUsers() {
     setEditingUser(user);
     setFormData({
       username: user.username,
-      password: user.password,
+      password: "", // Password not available client-side; leave blank to keep unchanged
       fullName: user.fullName,
       email: user.email,
       role: user.role,
@@ -66,12 +66,19 @@ export function ManageUsers() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.username || !formData.password || !formData.fullName || !formData.email) {
+    const isCreating = !editingUser;
+    if (!formData.username || !formData.fullName || !formData.email) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    if (formData.password.length < 8) {
+    // Password required when creating, optional when editing
+    if (isCreating && !formData.password) {
+      toast.error("Password is required for new users");
+      return;
+    }
+
+    if (formData.password && formData.password.length < 8) {
       toast.error("Password must be at least 8 characters long");
       return;
     }
@@ -94,7 +101,10 @@ export function ManageUsers() {
     }
 
     if (editingUser) {
-      updateUser(editingUser.id, formData);
+      // Don't send password if it wasn't changed (empty = keep current)
+      const updates = { ...formData };
+      if (!updates.password) delete updates.password;
+      updateUser(editingUser.id, updates);
       toast.success(`User "${formData.fullName}" updated successfully`);
     } else {
       addUser({ ...formData, parentCode });
@@ -145,11 +155,12 @@ export function ManageUsers() {
       return;
     }
 
-    // Generate an 8-character random temporary password
+    // Generate a cryptographically secure 12-char temporary password
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+    const randomBytes = crypto.getRandomValues(new Uint8Array(12));
     let tempPassword = "";
-    for (let i = 0; i < 8; i++) {
-      tempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 12; i++) {
+      tempPassword += chars.charAt(randomBytes[i] % chars.length);
     }
 
     updateUser(user.id, { password: tempPassword, mustChangePassword: true });

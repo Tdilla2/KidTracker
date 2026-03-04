@@ -355,57 +355,44 @@ export function DataProvider({ children: reactChildren }: { children: ReactNode 
     console.log("Fetching data for daycare ID:", daycareId);
 
     try {
-      // Helper function to filter data by daycare_id on client side
-      // (API doesn't support daycare_id query parameter filtering)
-      const filterByDaycare = (rows: any[] | null, daycareId: string | null) => {
-        if (!rows) return [];
-        if (!daycareId) return rows; // No filter needed
-        return rows.filter((row: any) => row.daycare_id === daycareId);
+      // Helper: build query with optional daycare_id scoping (server-side)
+      const scopedQuery = (table: string) => {
+        const q = supabase.from(table).select("*");
+        return daycareId ? q.eq("daycare_id", daycareId) : q;
       };
 
-      // Fetch children - fetch all and filter client-side
-      const { data: childrenRows } = await supabase.from("children").select("*");
-      const filteredChildren = filterByDaycare(childrenRows, daycareId);
-      setChildrenData(filteredChildren.map(dbToChild));
+      // Fetch children — server-side filtered by daycare_id
+      const { data: childrenRows } = await scopedQuery("children");
+      setChildrenData((childrenRows || []).map(dbToChild));
 
-      // Fetch attendance - fetch all and filter client-side
-      const { data: attendanceRows } = await supabase.from("attendance").select("*");
-      const filteredAttendance = filterByDaycare(attendanceRows, daycareId);
-      setAttendance(filteredAttendance.map(dbToAttendance));
+      // Fetch attendance
+      const { data: attendanceRows } = await scopedQuery("attendance");
+      setAttendance((attendanceRows || []).map(dbToAttendance));
 
-      // Fetch invoices - fetch all and filter client-side
-      const { data: invoiceRows } = await supabase.from("invoices").select("*");
-      const filteredInvoices = filterByDaycare(invoiceRows, daycareId);
-      setInvoices(filteredInvoices.map(dbToInvoice));
+      // Fetch invoices
+      const { data: invoiceRows } = await scopedQuery("invoices");
+      setInvoices((invoiceRows || []).map(dbToInvoice));
 
-      // Fetch meal menus - fetch all and filter client-side
-      const { data: mealMenuRows } = await supabase.from("meal_menus").select("*");
-      const filteredMealMenus = filterByDaycare(mealMenuRows, daycareId);
-      setMealMenus(filteredMealMenus.map(dbToMealMenu));
+      // Fetch meal menus
+      const { data: mealMenuRows } = await scopedQuery("meal_menus");
+      setMealMenus((mealMenuRows || []).map(dbToMealMenu));
 
-      // Fetch activity photos - fetch all and filter client-side
-      const { data: photoRows } = await supabase.from("activity_photos").select("*");
-      const filteredPhotos = filterByDaycare(photoRows, daycareId);
-      setActivityPhotos(filteredPhotos.map(row => dbToActivityPhoto(row)));
+      // Fetch activity photos
+      const { data: photoRows } = await scopedQuery("activity_photos");
+      setActivityPhotos((photoRows || []).map(row => dbToActivityPhoto(row)));
 
-      // Fetch daily activities - fetch all and filter client-side
-      const { data: activityRows } = await supabase.from("daily_activities").select("*");
-      const filteredActivities = filterByDaycare(activityRows, daycareId);
-      setDailyActivities(filteredActivities.map(dbToDailyActivity));
+      // Fetch daily activities
+      const { data: activityRows } = await scopedQuery("daily_activities");
+      setDailyActivities((activityRows || []).map(dbToDailyActivity));
 
-      // Fetch classrooms - fetch all and filter client-side
-      const { data: classroomRows } = await supabase.from("classrooms").select("*");
-      const filteredClassrooms = filterByDaycare(classroomRows, daycareId);
-      setClassrooms(filteredClassrooms.map(dbToClassroom));
+      // Fetch classrooms
+      const { data: classroomRows } = await scopedQuery("classrooms");
+      setClassrooms((classroomRows || []).map(dbToClassroom));
 
-      // Fetch company info - fetch all and filter client-side since API doesn't support daycare_id filter
-      const { data: companyRows, error: companyError } = await supabase.from("company_info").select("*");
-      console.log("Company info query result:", { daycareId, companyRows, companyError });
+      // Fetch company info — server-side filtered
+      const { data: companyRows, error: companyError } = await scopedQuery("company_info");
       if (companyRows && companyRows.length > 0) {
-        // Filter by daycare_id on the client side
-        const matchingCompanyInfo = daycareId
-          ? companyRows.find((row: any) => row.daycare_id === daycareId)
-          : companyRows[0];
+        const matchingCompanyInfo = companyRows[0];
 
         if (matchingCompanyInfo) {
           console.log("Setting company info to:", matchingCompanyInfo.name, "for daycare_id:", daycareId);

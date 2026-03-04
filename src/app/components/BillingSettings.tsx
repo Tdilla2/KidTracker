@@ -7,8 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { getTrialInfo } from "../../utils/trialUtils";
 import { PricingPage } from "./PricingPage";
 import { toast } from "sonner";
-
-const API_BASE = "https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api";
+import { API_BASE, API_KEY } from "../../lib/api";
 
 const PLAN_LABELS: Record<string, string> = {
   none: "No Plan",
@@ -51,7 +50,7 @@ export function BillingSettings() {
     try {
       const res = await fetch(`${API_BASE}/stripe/create-portal-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
         body: JSON.stringify({
           daycareId: currentDaycare.id,
           returnUrl: window.location.origin,

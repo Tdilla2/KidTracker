@@ -28,11 +28,6 @@ export function ForcePasswordChange() {
       return;
     }
 
-    if (currentUser && newPassword === currentUser.password) {
-      toast.error("New password must be different from your current password");
-      return;
-    }
-
     setIsLoading(true);
 
     try {

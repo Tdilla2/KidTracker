@@ -10,8 +10,7 @@ import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-
-const API_BASE = 'https://v9iqpcma3c.execute-api.us-east-1.amazonaws.com/prod/api';
+import { API_BASE, API_KEY } from "../../lib/api";
 
 interface QBOConnection {
   isConnected: boolean;
@@ -74,24 +73,37 @@ export function QuickBooksIntegration() {
     window.addEventListener('message', onMessage);
 
     // localStorage fallback (main-window redirect flow)
-    const pending = localStorage.getItem('qbo_pending_callback');
-    if (pending) {
-      localStorage.removeItem('qbo_pending_callback');
-      try {
-        const { code, realmId, daycareId: cbDaycareId, redirectUri } = JSON.parse(pending);
-        completeOAuth(code, realmId, cbDaycareId || daycareId, redirectUri);
-      } catch {
-        toast.error('Failed to complete QuickBooks connection');
+    const checkPending = () => {
+      const pending = localStorage.getItem('qbo_pending_callback');
+      if (pending) {
+        localStorage.removeItem('qbo_pending_callback');
+        try {
+          const { code, realmId, daycareId: cbDaycareId, redirectUri } = JSON.parse(pending);
+          completeOAuth(code, realmId, cbDaycareId || daycareId, redirectUri);
+        } catch {
+          toast.error('Failed to complete QuickBooks connection');
+        }
       }
-    }
+    };
 
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
+    // Check immediately on mount
+    checkPending();
+
+    // Also poll periodically in case the callback is stored after mount
+    const interval = setInterval(checkPending, 1000);
+
+    return () => {
+      window.removeEventListener('message', onMessage);
+      clearInterval(interval);
+    };
+  }, [daycareId]);
 
   const loadStatus = async () => {
     setIsLoadingStatus(true);
     try {
-      const res = await fetch(`${API_BASE}/qbo/status?daycare_id=${encodeURIComponent(daycareId)}`);
+      const res = await fetch(`${API_BASE}/qbo/status?daycare_id=${encodeURIComponent(daycareId)}`, {
+        headers: { 'X-API-Key': API_KEY },
+      });
       if (!res.ok) {
         // 500 usually means QBO tables aren't set up yet — silently set disconnected
         setConnection({ isConnected: false, companyName: '', realmId: '', lastSync: null });
@@ -116,7 +128,8 @@ export function QuickBooksIntegration() {
     try {
       const redirectUri = window.location.origin;
       const res = await fetch(
-        `${API_BASE}/qbo/auth-url?daycare_id=${encodeURIComponent(daycareId)}&redirect_uri=${encodeURIComponent(redirectUri)}`
+        `${API_BASE}/qbo/auth-url?daycare_id=${encodeURIComponent(daycareId)}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        { headers: { 'X-API-Key': API_KEY } }
       );
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
@@ -141,16 +154,20 @@ export function QuickBooksIntegration() {
     try {
       const res = await fetch(`${API_BASE}/qbo/callback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ code, realmId, daycareId: cbDaycareId, redirectUri: redirectUri || window.location.origin }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Connection failed');
+      if (!res.ok || !data.success) {
+        const detail = data.detail ? ` (${data.detail})` : '';
+        throw new Error((data.error || 'Connection failed') + detail);
+      }
       setConnection({ isConnected: true, companyName: data.companyName, realmId: data.realmId, lastSync: null });
       toast.success(`Connected to QuickBooks — ${data.companyName}`);
       addHistory('customer', 'success', 1, `Connected to ${data.companyName}`);
     } catch (err: any) {
-      toast.error('QuickBooks connection failed: ' + err.message);
+      console.error('QuickBooks OAuth error:', err);
+      toast.error('QuickBooks connection failed: ' + err.message, { duration: 8000 });
     } finally {
       setIsConnecting(false);
     }
@@ -160,7 +177,7 @@ export function QuickBooksIntegration() {
     try {
       const res = await fetch(`${API_BASE}/qbo/disconnect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ daycareId }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -188,7 +205,7 @@ export function QuickBooksIntegration() {
     try {
       const res = await fetch(`${API_BASE}/qbo/sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ daycareId, type }),
       });
       const data = await res.json();
@@ -215,7 +232,7 @@ export function QuickBooksIntegration() {
     try {
       const res = await fetch(`${API_BASE}/qbo/import`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ daycareId }),
       });
       const data = await res.json();

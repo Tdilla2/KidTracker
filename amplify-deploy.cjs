@@ -7,9 +7,15 @@ const APP_ID = 'd2nbsjhv8lzch9';
 const BRANCH_NAME = 'main';
 const REGION = 'us-east-1';
 
-const client = new AmplifyClient({
-  region: REGION,
-});
+// Build credentials: prefer explicit env vars, fall back to default chain (e.g. ~/.aws/credentials)
+const clientConfig = { region: REGION };
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+  clientConfig.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID.trim(),
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY.trim(),
+  };
+}
+const client = new AmplifyClient(clientConfig);
 
 function uploadToUrl(url, data) {
   return new Promise((resolve, reject) => {

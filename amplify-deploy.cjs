@@ -10,9 +10,13 @@ const REGION = 'us-east-1';
 // Build credentials: prefer explicit env vars, fall back to default chain (e.g. ~/.aws/credentials)
 const clientConfig = { region: REGION };
 if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+  const accessKey = process.env.AWS_ACCESS_KEY_ID.replace(/[^\x20-\x7E]/g, '').trim();
+  const secretKey = process.env.AWS_SECRET_ACCESS_KEY.replace(/[^\x20-\x7E]/g, '').trim();
+  console.log(`AWS_ACCESS_KEY_ID length: ${accessKey.length} (expected: 20)`);
+  console.log(`AWS_SECRET_ACCESS_KEY length: ${secretKey.length} (expected: 40)`);
   clientConfig.credentials = {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID.trim(),
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY.trim(),
+    accessKeyId: accessKey,
+    secretAccessKey: secretKey,
   };
 }
 const client = new AmplifyClient(clientConfig);

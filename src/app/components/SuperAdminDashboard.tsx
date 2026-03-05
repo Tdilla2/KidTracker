@@ -74,6 +74,12 @@ export function SuperAdminDashboard() {
       return;
     }
     try {
+      console.log("Adding super admin with data:", {
+        username: superAdminForm.username,
+        fullName: superAdminForm.fullName,
+        email: superAdminForm.email,
+        role: "super_admin",
+      });
       await addUser({
         username: superAdminForm.username,
         fullName: superAdminForm.fullName,
@@ -88,7 +94,9 @@ export function SuperAdminDashboard() {
       resetSuperAdminForm();
       setIsAddSuperAdminOpen(false);
     } catch (error: any) {
-      toast.error(error.message || "Failed to create super admin");
+      console.error("Add super admin error:", error);
+      const msg = error?.error?.message || error?.message || (typeof error === 'string' ? error : "Failed to create super admin");
+      toast.error(msg);
     }
   };
 

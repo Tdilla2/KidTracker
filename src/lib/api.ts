@@ -129,9 +129,6 @@ class ApiClient {
       return { data, error: null };
     } catch (error: any) {
       const result = { data: null, error };
-      if (reject) {
-        reject(result);
-      }
       resolve(result);
       return result;
     }

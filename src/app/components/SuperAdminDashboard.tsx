@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Settings, Lock, User as UserIcon, Archive, ArchiveRestore, Shield, Mail, Eye, EyeOff } from "lucide-react";
+import { Building2, Plus, Edit, Trash2, Users, Copy, Search, Clock, CheckCircle, AlertTriangle, RefreshCw, Zap, Lock, User as UserIcon, Archive, ArchiveRestore, Shield, Mail, Eye, EyeOff } from "lucide-react";
 import kidtrackerLogo from "../assets/kidtracker-logo.jpg";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -31,9 +31,11 @@ export function SuperAdminDashboard() {
   const [editingDaycare, setEditingDaycare] = useState<Daycare | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddSuperAdminOpen, setIsAddSuperAdminOpen] = useState(false);
+  const [editingSuperAdmin, setEditingSuperAdmin] = useState<any | null>(null);
+  const [isEditSuperAdminOpen, setIsEditSuperAdminOpen] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [superAdminForm, setSuperAdminForm] = useState({
     username: "",
     fullName: "",
@@ -41,9 +43,10 @@ export function SuperAdminDashboard() {
     password: "",
     confirmPassword: "",
   });
-  const [settingsForm, setSettingsForm] = useState({
+  const [editSuperAdminForm, setEditSuperAdminForm] = useState({
     username: "",
-    currentPassword: "",
+    fullName: "",
+    email: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -86,6 +89,58 @@ export function SuperAdminDashboard() {
       setIsAddSuperAdminOpen(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to create super admin");
+    }
+  };
+
+  const handleEditSuperAdmin = (admin: any) => {
+    setEditingSuperAdmin(admin);
+    setEditSuperAdminForm({
+      username: admin.username,
+      fullName: admin.fullName,
+      email: admin.email,
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setShowEditPassword(false);
+    setIsEditSuperAdminOpen(true);
+  };
+
+  const handleUpdateSuperAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSuperAdmin) return;
+
+    if (!editSuperAdminForm.username || !editSuperAdminForm.fullName || !editSuperAdminForm.email) {
+      toast.error("Username, full name, and email are required");
+      return;
+    }
+
+    if (editSuperAdminForm.newPassword) {
+      if (editSuperAdminForm.newPassword.length < 8) {
+        toast.error("Password must be at least 8 characters");
+        return;
+      }
+      if (editSuperAdminForm.newPassword !== editSuperAdminForm.confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+      }
+    }
+
+    try {
+      const updates: any = {
+        username: editSuperAdminForm.username,
+        fullName: editSuperAdminForm.fullName,
+        email: editSuperAdminForm.email,
+      };
+      if (editSuperAdminForm.newPassword) {
+        updates.password = editSuperAdminForm.newPassword;
+      }
+
+      await updateUser(editingSuperAdmin.id, updates);
+      toast.success(`Super admin "${editSuperAdminForm.username}" updated successfully`);
+      setIsEditSuperAdminOpen(false);
+      setEditingSuperAdmin(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update super admin");
     }
   };
 
@@ -284,72 +339,6 @@ export function SuperAdminDashboard() {
     }
   };
 
-  // Handle opening settings dialog
-  const handleOpenSettings = () => {
-    setSettingsForm({
-      username: currentUser?.username || "",
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setIsSettingsOpen(true);
-  };
-
-  // Handle updating super admin credentials
-  const handleUpdateCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validation
-    if (!settingsForm.currentPassword) {
-      toast.error("Current password is required");
-      return;
-    }
-
-    // Verify current password
-    if (settingsForm.currentPassword !== currentUser?.password) {
-      toast.error("Current password is incorrect");
-      return;
-    }
-
-    // Check if anything is being changed
-    const isUsernameChanged = settingsForm.username !== currentUser?.username;
-    const isPasswordChanged = settingsForm.newPassword.length > 0;
-
-    if (!isUsernameChanged && !isPasswordChanged) {
-      toast.error("No changes to save");
-      return;
-    }
-
-    // Validate new password if being changed
-    if (isPasswordChanged) {
-      if (settingsForm.newPassword.length < 8) {
-        toast.error("New password must be at least 8 characters");
-        return;
-      }
-      if (settingsForm.newPassword !== settingsForm.confirmPassword) {
-        toast.error("Passwords do not match");
-        return;
-      }
-    }
-
-    try {
-      const updates: any = {};
-      if (isUsernameChanged) {
-        updates.username = settingsForm.username;
-      }
-      if (isPasswordChanged) {
-        updates.password = settingsForm.newPassword;
-      }
-
-      await updateUser(currentUser!.id, updates);
-
-      toast.success("Credentials updated successfully! Please log in again with your new credentials.", { duration: 5000 });
-      setIsSettingsOpen(false);
-    } catch (error) {
-      toast.error("Failed to update credentials");
-    }
-  };
-
   // Overall stats
   const trialCounts = daycares.reduce(
     (acc, dc) => {
@@ -382,14 +371,6 @@ export function SuperAdminDashboard() {
               <p className="text-blue-50 text-xs sm:text-base">Manage all daycares in the KidTrackerApp™ system</p>
             </div>
           </div>
-          <Button
-            size="sm"
-            className="bg-blue-800 text-white hover:bg-blue-900 shrink-0"
-            onClick={handleOpenSettings}
-          >
-            <Settings className="mr-1 sm:mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-          </Button>
         </div>
       </div>
 
@@ -988,6 +969,14 @@ export function SuperAdminDashboard() {
                     <Badge variant="outline" className="border-purple-300 text-purple-700">You</Badge>
                   )}
                   <Badge variant="outline" className="border-green-300 text-green-700">{admin.status}</Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditSuperAdmin(admin)}
+                    title="Edit super admin"
+                  >
+                    <Edit className="h-4 w-4 text-purple-600" />
+                  </Button>
                   {admin.id !== currentUser?.id && (
                     <Button
                       variant="ghost"
@@ -1008,106 +997,109 @@ export function SuperAdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Settings Dialog */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+      {/* Edit Super Admin Dialog */}
+      <Dialog open={isEditSuperAdminOpen} onOpenChange={(open) => {
+        setIsEditSuperAdminOpen(open);
+        if (!open) setEditingSuperAdmin(null);
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Super Admin Settings</DialogTitle>
+            <DialogTitle>Edit Super Admin</DialogTitle>
             <DialogDescription>
-              Update your super admin username and password
+              Update super admin account details
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateCredentials} className="space-y-4">
+          <form onSubmit={handleUpdateSuperAdmin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="settings-username">Username</Label>
+              <Label htmlFor="edit-sa-username">Username *</Label>
               <div className="relative">
                 <UserIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  id="settings-username"
-                  value={settingsForm.username}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, username: e.target.value })}
+                  id="edit-sa-username"
+                  value={editSuperAdminForm.username}
+                  onChange={(e) => setEditSuperAdminForm({ ...editSuperAdminForm, username: e.target.value })}
                   className="pl-10"
-                  placeholder="Enter new username"
+                  placeholder="Enter username"
                   required
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Current: <span className="font-mono">{currentUser?.username}</span>
-              </p>
             </div>
-
-            <div className="border-t pt-4">
-              <h3 className="text-sm font-medium mb-3">Change Password</h3>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current Password *</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="current-password"
-                      type="password"
-                      value={settingsForm.currentPassword}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, currentPassword: e.target.value })}
-                      className="pl-10"
-                      placeholder="Enter current password"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="new-password"
-                      type="password"
-                      value={settingsForm.newPassword}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, newPassword: e.target.value })}
-                      className="pl-10"
-                      placeholder="Enter new password (optional)"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Leave blank to keep current password
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={settingsForm.confirmPassword}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, confirmPassword: e.target.value })}
-                      className="pl-10"
-                      placeholder="Confirm new password"
-                    />
-                  </div>
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-sa-fullName">Full Name *</Label>
+              <Input
+                id="edit-sa-fullName"
+                value={editSuperAdminForm.fullName}
+                onChange={(e) => setEditSuperAdminForm({ ...editSuperAdminForm, fullName: e.target.value })}
+                placeholder="Enter full name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-sa-email">Email *</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="edit-sa-email"
+                  type="email"
+                  value={editSuperAdminForm.email}
+                  onChange={(e) => setEditSuperAdminForm({ ...editSuperAdminForm, email: e.target.value })}
+                  className="pl-10"
+                  placeholder="Enter email"
+                  required
+                />
               </div>
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-800">
-                <strong>Note:</strong> After updating your credentials, you will need to log in again with your new username and password.
-              </p>
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium mb-3">Change Password (optional)</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-sa-password">New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="edit-sa-password"
+                      type={showEditPassword ? "text" : "password"}
+                      value={editSuperAdminForm.newPassword}
+                      onChange={(e) => setEditSuperAdminForm({ ...editSuperAdminForm, newPassword: e.target.value })}
+                      className="pl-10 pr-10"
+                      placeholder="Leave blank to keep current"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditPassword(!showEditPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                {editSuperAdminForm.newPassword && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-sa-confirmPassword">Confirm New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="edit-sa-confirmPassword"
+                        type="password"
+                        value={editSuperAdminForm.confirmPassword}
+                        onChange={(e) => setEditSuperAdminForm({ ...editSuperAdminForm, confirmPassword: e.target.value })}
+                        className="pl-10"
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsSettingsOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setIsEditSuperAdminOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-blue-700 hover:bg-blue-800">
-                Update Credentials
+              <Button type="submit" className="bg-purple-700 hover:bg-purple-800">
+                Save Changes
               </Button>
             </div>
           </form>
